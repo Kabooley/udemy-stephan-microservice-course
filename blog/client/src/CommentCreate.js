@@ -9,7 +9,8 @@ const CommentCreate = ({ postId }) => {
 
         await axios.post(`http://localhost:4001/posts/${postId}/comments`, {
             content
-        });
+        })
+        .catch(e => console.error(e.message));
 
         setContent('');
         
