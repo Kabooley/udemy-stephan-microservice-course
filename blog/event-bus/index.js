@@ -5,8 +5,14 @@ const axios = require('axios');
 const app = express();
 app.use(bodyParser.json());
 
+// NOTE: イベントキュー
+const events = [];
+
 app.post('/events', (req, res) => {
     const event = req.body;
+
+    // NOTE: イベントを保存する
+    event.pus(event);
 
     axios.post("http://localhost:4000/events", event).catch((err) => {
         console.log(err.message);
@@ -22,6 +28,11 @@ app.post('/events', (req, res) => {
     });
     res.send({status: 'OK'});
 });
+
+// NOTE: GETリクエストですべてのeventを送信する
+app.get('/events', (req, res) => {
+    res.send(events);
+})
 
 app.listen(4005, () => {
     console.log('Listening on 4005');
