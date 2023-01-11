@@ -32,7 +32,7 @@ app.post('/events', (req, res) => {
 // NOTE: GETリクエストですべてのeventを送信する
 app.get('/events', (req, res) => {
     res.send(events);
-})
+});
 
 app.listen(4005, () => {
     console.log('Listening on 4005');
