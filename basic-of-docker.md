@@ -91,3 +91,74 @@ $ sudo service docker start
 同一のOS上で同一のプログラムが複数実行されているとする。
 
 TODO: 同じプログラムが同一のOS上で動かせる仕組みについてまとめ
+
+TODO: namespaceについてまとめ
+
+namespace: `Isolating resources per process`
+
+
+#### コマンド：override default command
+
+```bash
+# `bustybox`にはechoプログラムが含まれているので`echo`が実行できる
+$ docker run bustybox echo hi there
+# `hello world`にはechoプログラムが存在しないので実行できない
+$ docker run hello world
+
+# 実行中のdockerコンテナを表示する
+$ docker ps
+# これまでに作成したすべてのコンテナを表示する
+$ docker ps
+```
+
+## `docker`コマンドのパーミッション変更
+
+https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user
+
+*要は現状`sudo`を接頭辞にしなくてはならない*
+
+```bash
+$ which docker
+/usr/bin/docker
+$ ls -l /usr/bin/docker
+-rwxr-xr-x 1 root root 50722328 Dec 16 07:25 /usr/bin/docker
+```
+
+ということで、なんと現状rootユーザにしか権限がないので
+
+```bash
+$ docker ps
+Got permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.24/containers/json": dial unix /var/run/docker.sock: connect: permission denied
+```
+
+となる。
+
+パーミッションの付与。
+
+> Docker daemonはUNIX socketにバインドされており、UNIX socketはrootユーザのみが所持している。
+> rootユーザ以外がdockerを使うにはsudoが必須になる
+
+> sudo抜きにしたいなら`docker`というグループを追加して...
+
+とのことなのでそのままガイドに従って
+
+```bash
+$ sudo groupadd docker
+# $USERはユーザ名
+$ sudo usermod -aG docker $USER
+# 一旦ログアウト。再ログインして
+$ docker run hello-world
+# sudoなしで実行できた
+```
+
+#### よく使うかも
+
+```bash
+# コマンドはどこにある？
+$ which docker-compose
+/usr/local/docker-compose
+
+# 権限はどうなっている？
+$ ls -l /usr/local/docker-compose
+-rx-rx--x root root ...
+```
