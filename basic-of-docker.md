@@ -111,6 +111,111 @@ $ docker ps
 $ docker ps
 ```
 
+#### container lifecycle
+
+コンテナのライフサイクル。
+
+- コンテナの開始
+
+```bash
+$ docker run <docker-image>
+```
+
+https://docs.docker.com/engine/reference/commandline/run/
+
+書き込み可能なコンテナ層を指定のイメージに対して生成して、そのコンテナを開始する。
+
+このように、
+
+docker runは`/containers/create`から`/containers/(id)/start`するのと同じことである
+
+- コンテナの生成
+
+```bash
+$ docker create <image-name>
+```
+
+https://docs.docker.com/engine/reference/commandline/create/
+
+新規のコンテナの生成。
+
+書き込み可能なコンテナの層を生成して、stdoutへそのコンテナのIDを出力する。
+
+このあとdocker start <container-id>することで生成したコンテナを開始することができる。
+
+- コンテナの開始
+
+```bash
+# docker container createの短縮版である
+$ docker start <container-id>
+```
+
+生成済のコンテナ層を開始することができる。その指定方法はコンテナのIDを指定するか
+
+- コンテナの停止
+
+```bash
+$ docker run <docker-image>
+```
+
+https://docs.docker.com/engine/reference/commandline/stop/
+
+とにかくコンテナを停止させると。
+
+`SIGTERM`信号を、コンテナ内部のメインプロセスが取得し、猶予期間ののち`SIGKILL`信号を取得する。
+
+よく`docker pause vs docker stop`の比較がなされるようである。
+
+受け取る信号が異なるようである。
+
+docker pauseは`SIGSTOP`を受け取る。
+
+参考:
+
+https://stackoverflow.com/questions/51466148/pause-vs-stop-in-docker
+
+要は、
+
+`SIGTERM`: 終了準備してね
+
+`SIGKILL`: 終了してね
+
+`SIGSTOP`: 停止してね
+
+の信号をプロセスへ送信しているのである。
+
+- 停止中の**すべての**コンテナの削除
+
+NOTE: `SIGTERM`して10秒たっても終了しなかったら強制的にプロセス切るさせられるらしい。
+
+```bash
+$ docker system <docker-image>
+```
+
+https://docs.docker.com/engine/reference/commandline/system_prune/
+
+停止中のすべてのdocker コンテナの削除。
+
+dockerをまったく使わなくなったとか、容量を確保したいときに便利。
+
+
+```bash
+$ docker run <docker-image>
+```
+
+#### オプション：よく使いそうなやつ
+
+
+- `-a`: 実行するコンテナの出力先をターミナルに指定する
+
+https://docs.docker.com/engine/reference/commandline/start/#options
+
+> Attach STDOUT/STDERR and forward signals
+
+```bash
+$ docker start -a xxxxxxxxxx
+```
+
 ## `docker`コマンドのパーミッション変更
 
 https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user
@@ -151,6 +256,28 @@ $ docker run hello-world
 # sudoなしで実行できた
 ```
 
+#### `docker logs`: `-a`フラグなしでコンテナからの出力を取得する方法
+
+```bash
+$ docker logs <container-id>
+```
+
+-aフラグを付けて実行することをうっかり忘れたときに。
+
+#### dockerコンテナの停止方法
+
+`^C`なしで。
+
+```bash
+$ docker start xxxxsomecontaineridxxxx
+xxxxsomecontaineridxxxx
+
+$ docker log xxxxsomecontaineridxxxx
+# you can get specified id container log running background.
+
+$ docoker stop xxxxsomecontaineridxxxx
+```
+
 #### よく使うかも
 
 ```bash
@@ -161,4 +288,181 @@ $ which docker-compose
 # 権限はどうなっている？
 $ ls -l /usr/local/docker-compose
 -rx-rx--x root root ...
+```
+
+## マルチ・コマンド・コンテナ
+
+OSSの`redis server`をdockerで実行させてみる。
+
+redis serverは対話型のDBで、redisサーバと対話するためのCLIをプログラム中に実行することで対話が実現されている。
+
+つまり、
+
+redisサーバ自体と、redis cliの2つのプロセスが必要なのである。
+
+redisサーバをdocker　statさせたらどうやってredis cliをターミナルに呼び出せばいいのあか？
+
+```bash
+# start redis server
+$ docker run redis
+...
+# 入力を受け付けるようになっているけれど...
+redis-cli
+# 上記のコマンドが実行されるわけではない...
+```
+
+ターミナル別窓を開いて
+
+```bash
+$ docker run redis-cli
+# そんなコンテナはないといわれる
+```
+当然である。redi cliはredis serverの中で実行されているからである。
+
+
+#### `docker exec`
+
+docker containerのなかで追加のコマンドを実行するために使用する。
+
+```bash
+# In another terminal window...
+$ docker ps
+# Now you can make sure running redis server...
+$ docker exec -it xxxredisservercontaineridxxxx redis-cli
+# 実行できた！
+127.0.0.193> 
+```
+
+つまりこうである。
+
+```bash
+$ docker exec -it <container-id> <command-contaier-includes>
+```
+
+https://docs.docker.com/engine/reference/commandline/exec/
+
+> The docker exec command runs a new command in a running container.
+
+
+
+#### `-it` flag
+
+要は
+
+「現在使っているターミナルで」、「出力内容をターミナルに表示させる」。
+
+先のコマンドでいえば
+
+「<container-id>の実行出力内容をこのターミナルに指定する」という命令である。
+
+https://docs.docker.com/engine/reference/commandline/exec/#options
+
+`--interactive`: KEEP STDIN open even if not attatched.
+
+`--tty`: Allocate a pseudo-TTY
+
+wtf `pseudo-TTY`?
+
+https://unix.stackexchange.com/a/21149
+
+#### Getting command prompt in container.
+
+コンテナ内でコマンドを実行する方法を学習した。
+
+ところでコンテナ内でたくさんコマンドを実行しなくてはならないときに、
+
+そのたびに別窓を開いてdocker exec しなくてはならないのだろうか？
+
+非常に面倒である。
+
+コマンドごとに別窓を開くのではなくて、
+
+そのコンテナのコマンドプロンプト自体を取得してしまえばよい。
+
+```
+$ docker exec -it xxxsomeawesomeidxxxx sh
+# cd ~/
+# ls
+bin data etc ...
+# redis-cli
+127.0.0.93> ...
+# ^C
+```
+
+https://docs.docker.com/engine/reference/commandline/exec/#examples
+
+`sh`: そのcontainer-idコンテナのインタラクティブshell実行してくれる。
+
+> This starts a new shell session in the container mycontainer.
+
+終了させたいときはCtrl Cまたはシェルで`exit`と入力することで終了させる。
+
+#### Starting wiht a Shell
+
+```bash
+$ docker run -it <image-name> sh
+```
+
+「このターミナルで実行結果を出力させて、インタラクティブシェルも呼出す」
+
+#### Isolating Container
+
+今同じドッカーイメージを二つのコンテナで実行されているとする。
+
+両コンテナはファイルシステムを共有するのか？
+
+結論として、コンテナはそれぞれ独立なので共有されることはあり得ない。
+
+```bash
+# terminal 1
+$ docker run -it busybox sh
+/# ls
+bin dev etc...
+/# touch new-file.txt
+ls 
+bin dev etc new-file.txt...
+```
+```bash
+# terminal 2
+# 同じdockerイメージを別のコンテナで実行する
+$ docker run -it busybox sh
+/# ls
+bin dev etc...
+```
+ターミナル2の方では`new-file.txt`は存在しない。
+
+## Creating Docker image
+
+`DockerFile`: Configuration to define how our container should behave.
+
+DockerFile --> DockerClient --> DockerServer --> UsabeImage!
+
+どっかーファイルを生成する流れ：
+
+- ベースイメージの決定
+- 追加のプログラムを得るためにコマンドを実行する
+- コンテナをセットアップするための実行コマンドの決定
+
+これ以降の講義では、
+
+`redis-server`を実行するコンテナイメージの生成が目標となる。
+
+`./redis-image`
+
+```dockerfile
+# use and exsigting docker image as a base
+FROM alpine
+# Donwload and install a dependency
+RUN apk add --update redis
+
+# Tell the image what to do when it starts as a container
+CMD ["redis-server"]
+```
+
+```bash
+$ cd redis-image/
+$ docker build .
+# ...
+Successfully Built. xxxximageidxxxx
+$ docker run xxximageidxxxx
 ```
