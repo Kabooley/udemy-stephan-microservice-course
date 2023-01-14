@@ -431,7 +431,9 @@ bin dev etc...
 ```
 ターミナル2の方では`new-file.txt`は存在しない。
 
-## Creating Docker image
+## Dockefile and build
+
+#### Creating Docker image
 
 `DockerFile`: Configuration to define how our container should behave.
 
@@ -466,3 +468,79 @@ $ docker build .
 Successfully Built. xxxximageidxxxx
 $ docker run xxximageidxxxx
 ```
+
+#### Dockerfile
+
+参考：
+
+https://docs.docker.jp/develop/develop-images/dockerfile_best-practices.html
+
+中身の意味
+
+```Dockerfile
+# とくに重要な中心的なDockerfile命令文３つ
+FROM alpine
+
+RUN apk add --update redis
+
+CMD ["redis-server"]
+```
+
+Dockerfileを書くということは：
+
+≒**OSのないコンピュータを渡されてChromeをインストールする**のと同じことである。
+
+つまり、Dockerfileに書く内容は空っぽのPCをまずスタートラインとして捉えるべきであるということになる。
+
+`docker build <dockerfile>`の実行とは：
+
+要は(Dockerfile命令の)各段階のスナップショットをとっていき、そのスナップショットをあつめてdocker イメージとすることである。
+
+FROM:
+
+Dockerfileはdockerイメージを生成するための礎である。
+
+イメージの土台は可能な限り公式のありものを使うのが通例である。
+
+alpineは公式が管理しているLinuxディストリビューションである。
+
+つまりLinuxをインストールするところから始めているのである。
+
+RUN:
+
+RUNで指定した値はシェル内で実行される。
+
+実行結果は確定されたイメージということで次のステップで使用される。
+
+CMD:
+
+コンテナ実行時のデフォルトを指定するためにある。
+
+配列形式で、要素は実行する実行ファイルやパラメータとなる。
+
+CMD命令はDockerfileで一度しか使うことが許されない。複数CMDがあったとしたら最後のCMDのみ有効である。
+
+#### 簡単な要約 Quick recap
+
+`FROM alpine`: Download alpine image
+
+`RUN apk add --update redis`: 
+
+    - 前回のステップで生成されたイメージを取得する
+    - そこから(一時的な)コンテナを生成する
+    - そのコンテナの中で`apk add --update redis`を実行する
+    - そのコンテナのファイルシステムのスナップショットを取得する
+    - 一時的なコンテナを閉じる
+    - 取得したスナップショットを次のステップで使うイメージとしてとっておく
+
+`CMD ["redis-server"]`
+
+    - 前回のステップで生成されたイメージを取得する
+    - そこから(一時的な)コンテナを生成する
+    - コンテナに起動時に"redis-server"を実行するように伝える
+    - そのコンテナのファイルシステムのスナップショットを取得する
+    - そうして実行時のデフォルトコマンドを実行した時のコンテナのスナップショットを取得する
+    - 一時的なコンテナを閉じる
+    - 取得したスナップショットを次のステップで使うイメージとしてとっておく
+
+
