@@ -539,8 +539,179 @@ CMD命令はDockerfileで一度しか使うことが許されない。複数CMD�
     - そこから(一時的な)コンテナを生成する
     - コンテナに起動時に"redis-server"を実行するように伝える
     - そのコンテナのファイルシステムのスナップショットを取得する
-    - そうして実行時のデフォルトコマンドを実行した時のコンテナのスナップショットを取得する
+    - そうして実行時のデフォルトコマンドを実行した時のコンテナのファイルシステムのスナップショットを取得する
     - 一時的なコンテナを閉じる
     - 取得したスナップショットを次のステップで使うイメージとしてとっておく
 
+
+#### Use Cache
+
+いま新たに`RUN apk add --update gcc`を追加するとする。
+
+```Dockerfile
+FROM alpine
+
+RUN apk add --update redis
+
+RUN apk add --update gcc
+
+CMD ["redis-server"]
+```
+
+```bash
+Sending build context to Docker daemon  2.048kB
+Step 1/4 : FROM alpine
+ ---> 042a816809aa
+Step 2/4 : RUN apk add --update redis
+# NOTE `using chache`とある
+# 
+# そのため、依存関係を取得するためのfetch等がない
+ ---> Using cache
+ ---> 297454cdd30c
+Step 3/4 : RUN apk add --update gcc
+ ---> Running in f06b337b9f12
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.17/main/x86_64/APKINDEX.tar.gz
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.17/community/x86_64/APKINDEX.tar.gz
+(1/10) Installing libgcc (12.2.1_git20220924-r4)
+# 
+# 中略
+# 
+(10/10) Installing gcc (12.2.1_git20220924-r4)
+Executing busybox-1.35.0-r29.trigger
+OK: 145 MiB in 26 packages
+Removing intermediate container f06b337b9f12
+ ---> 5f94ea20d4c9
+Step 4/4 : CMD ["redis-server"]
+ ---> Running in cdfe1e23007f
+Removing intermediate container cdfe1e23007f
+ ---> 7428e4269f8e
+Successfully built 7428e4269f8e
+```
+
+たとえばここからさらにDockerfileを変更しないでdocker buildすると、
+
+すべてキャッシュを使われたりするのでfetchなど完全に行われない
+
+順番を変くしてみたら？
+
+```Dockerfile
+FROM alpine
+# gccを先にしたら
+RUN apk add --update gcc
+
+RUN apk add --update redis
+
+CMD ["redis-server"]
+```
+
+この場合、gccをインストールするためにfetchが起こる
+
+```bash
+Sending build context to Docker daemon  2.048kB
+Step 1/4 : FROM alpine
+ ---> 042a816809aa
+Step 2/4 : RUN apk add --update gcc
+ ---> Running in d357b122c128
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.17/main/x86_64/APKINDEX.tar.gz
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.17/community/x86_64/APKINDEX.tar.gz
+(1/10) Installing libgcc (12.2.1_git20220924-r4)
+# 
+# 中略
+# 
+(10/10) Installing gcc (12.2.1_git20220924-r4)
+Executing busybox-1.35.0-r29.trigger
+OK: 142 MiB in 25 packages
+Removing intermediate container d357b122c128
+ ---> 40d636e946be
+Step 3/4 : RUN apk add --update redis
+ ---> Running in e1cb4a0d63ca
+(1/1) Installing redis (7.0.7-r0)
+Executing redis-7.0.7-r0.pre-install
+Executing redis-7.0.7-r0.post-install
+Executing busybox-1.35.0-r29.trigger
+OK: 145 MiB in 26 packages
+Removing intermediate container e1cb4a0d63ca
+ ---> 72aa5ce41a4c
+Step 4/4 : CMD ["redis-server"]
+ ---> Running in 5fe58dae4345
+Removing intermediate container 5fe58dae4345
+ ---> 0a526186a685
+Successfully built 0a526186a685
+```
+
+## Tagging image
+
+イメージにタグ付けする。
+
+https://docs.docker.com/get-started/02_our_app/#build-the-apps-container-image
+
+Running `docker build -t getting-started .`.
+
+> Finally, the -t flag tags your image. Think of this simply as a human-readable name for the final image. Since you named the image getting-started, you can refer to that image when you run a container.
+
+「これは単に人間がどっかーイメージ（の名前）を理解しやすくするための措置です」
+
+```bash
+$ docker build -t stephangrinder/redis:latest .
+# Tag name is concisted of...
+# 
+# Docker ID: stephangrinder
+# Repo/project name: redis
+# Version: latest
+```
+
+## `docker commit`
+
+これまでの話。
+
+イメージからコンテナを生成する話。
+
+では、
+
+逆にコンテナからイメージを生成することはできるのか？
+
+できるらしい。
+
+例えばこんな時。
+
+alpineだけのイメージからコンテナを実行して、
+
+実行中のコンテナの中で手動で依存関係をインストールした場合。
+
+```bash
+$ docker run -it alpine sh
+#/ apk add --update redis
+fetch htt://dl....
+#/ 
+```
+https://docs.docker.com/engine/reference/commandline/commit/
+
+> Create a new image from a container’s changes
+
+> 「コンテナの変更を反映したあらたなイメージを生成します」
+
+> It can be useful to commit a container’s file changes or settings into a new image.
+
+> 「コンテナのファイルの変更や設定を新しいイメージにコミットすると便利です。」
+
+NOTE: `docker commit`は一般的に使わない方がよい
+
+> Generally, it is better to use Dockerfiles to manage your images in a documented and maintainable way.
+
+つまり、
+
+`docker commit`は、奥の手という位置づけのdockerimageを変更する手段である。
+
+```bash
+# さきのつづきということで...
+$ docker commit -c 'CMD ["reds-server"]' <container-id>
+# commmitするとあらたなイメージのidが出力される
+sha256:xxxxxxnew-image-idxxxxxx
+$ docker run xxxxxxnew-image-idxxxxxx
+# 本来のDockerfileの内容通りに動作した
+```
+
+TODO: ここまでの話を、公式の説明を確認しながらまとめる。
+
+Dockerfileをビルドするときに裏側で行われていることなど。
 
