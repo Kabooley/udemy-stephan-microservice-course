@@ -1032,3 +1032,74 @@ $ docker exec -it xxxxcontaineridxxxx sh
 
 イメージに変更を反映したレイヤを追加（反映）させないと意味がない。
 
+コンテナを完全に再構築する必要がある。
+
+ではindex.js変更後再度
+
+`docker build -t stephangrinder/simpleweb:latest`
+
+を実行すると、
+
+変更したのが一つのファイルだけであるが「すべて実行される」
+
+つまり例えば、依存関係とかいちからすべてインストールする。
+
+依存関係は変更がないにもかかわらず。
+
+これはかなり無駄なので変更されたところだけを反映させたい。
+
+#### Minimizing Cache Busting and Rebuilding
+
+```Dockerfile
+# 変更を施した後のDockerfile
+
+FROM alpine:node
+
+WORKDIR /usr/app
+
+# 変更箇所１
+COPY ./package.json ./
+
+RUN npm install
+
+# 変更箇所2
+COPY ./ ./
+
+CMD ["npm", "start"]
+```
+つまり、
+
+package.jsonだけコンテナにコピーしてから、コンテナ内部でnpm installさせて
+
+そのあとで本来取り込んでほしいディレクトリをコピーさせる。
+
+```bash
+$ docker build -t stephangrinder/simpleweb:latest .
+# Dockerfileが変越されたのですべてゼロから実行される
+
+# そのごindex.jsに変更を加えたとして
+# 再度ビルドしてみると...
+
+$ docker build -t stephangrinder/simpleweb:latest .
+# 前略
+Step 3/6: COPY ./package.json ./
+    ---> using cache
+    ---> 4343fsfdss
+Step 4/6: RUN npm install
+    ---> Using cache
+    ---> 438203dsds
+Step 5/6: COPY ./ ./
+    ---> 85sdsds778
+# 以下略
+```
+ということで、
+
+Step3, 4は変更がないのでキャッシュが利用され、
+
+Step5で初めて変更が加えられたindex.jsを取り込むので
+
+依存関係のインストールに影響がない！
+
+...ということで
+
+Dockerfileの中身の工夫で無駄をたくさん省くことができる。

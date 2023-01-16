@@ -1,4 +1,4 @@
-# Note: Running services with Docker
+# Note: Seciton3: Running services with Docker
 
 
 ## deployの問題
@@ -56,7 +56,32 @@ Dockerはすべてをラッピングして同じ環境、同じ起動方法で�
 > これを行うと、プログラムが取得され、これらのノードの 1 つによって実行されるように多かれ少なかれランダムに割り当てられます。
 > 繰り返しますが、ノードは実際には単なる仮想マシンです。
 
-#### Dockerについて復習したかったら講座のおまけの講義を受けろ
+#### Docker Recapping
 
 --> `basic-of-docker.md`へ。
 
+## postサービスのDocker化
+
+post/Dockerfile
+
+```Dockerfile
+FROM node:alpine
+
+WORKDIR /app
+
+COPY package.json
+
+RUN npm install
+
+COPY ./ ./
+
+CMD ["npm", "start"]
+```
+
+`COPY ./ ./`するときにnode_modules/を含めたくない。
+
+なので`.dockerignore`を用いる。
+
+```dockerignore
+node_moodules
+```
