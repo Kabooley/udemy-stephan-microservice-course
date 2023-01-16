@@ -894,3 +894,141 @@ CMD ["npm", "start"]
 
 `ENOENT: no such file or directory, open '/package.json'`というエラーが出る。
 
+ここで裏側で何が起こっているのか見てみる。
+
+今のところ、`FROM`命令まではうまくいっている。
+
+`RUN`の段階になって一時的なコンテナをFROMのイメージから生成した。
+
+そのイメージから生成されるコンテナの中のファイルシステムには`package.json`は存在しない。
+
+当然である。 
+
+コンテナの中では生成されていないからである。
+
+`COPY`コマンドの利用：
+
+コンテキストからコンテナの中にコピーするファイル(ディレクトリ)を指定する。
+
+`COPY ./ ./`: 
+
+第一引数：「ビルドコンテキストのコピーするフォルダのパス」
+第二引数：「コンテナの中での出力先パス」
+
+
+```Dockerfile
+FROM alpine:node
+
+COPY ./ ./
+
+RUN npm install
+
+CMD ["npm", "start"]
+```
+
+```bash
+$ docker build -t stephangrinder/simpleweb:latest .
+```
+
+問題なくイメージを生成できた。
+
+chromeで`https://localhost:8080`を開くとアクセス拒否エラーが発生する。
+
+なのでコンテナの中で実行されているアプリケーションへのローカルのブラウザからアクセスする方法を模索する。
+
+コンテナポートフォワーディング：
+
+現在起こっていること...
+
+ポート番号8080でwebアプリケーションを実行しているコンテナを実行している。
+
+いまローカルのブラウザから8080へアクセスリクエストを送信したが、そんな到達先はないと言われアクセスできない。
+
+理由はポートマッピングがなされていないから。
+
+Dockerやコンテナ側の問題ではなくて
+
+ローカルマシンが制限しているのである。
+
+これは実行コマンドで解決できる。
+
+```bash
+# `-p`: publish a container's port to the host
+$ docker run -p 8080:8080 stephangrinder/simpleweb:latest
+```
+
+8080:8080は、
+
+ホスト側:コンテナ側
+
+ローカルマシン側の8080番ポート番号へのアクセスリクエストを、コンテナの中のポート番号8080番へマッピングします
+
+という命令である。
+
+
+#### ワーキングディレクトリの指定
+
+今回はコンテナ内部でシェルを起動してデバグする方法を学習する。
+
+NOTE: 基本的にコンテナ内部でシェルを起動して何か作業するのは推奨されない。
+
+```bash
+$ docker run -it stephangrinder/simpleweb:latest sh
+/ # ls
+Dockerfile
+index.js
+package.json
+...
+
+```
+
+現在全てのファイルがすべてrootディレクトリに配置されている。
+
+これはよくない状態なので
+
+`WORKDIR /usr/app`
+
+これにつづくすべてのコマンドはコンテナ内のこのパスのなかで実行される。
+
+
+```Dockerfile
+FROM alpine:node
+
+WORKDIR /usr/app
+
+COPY ./ ./
+
+RUN npm install
+
+CMD ["npm", "start"]
+```
+
+
+```bash
+$ docker build -t stephangrinder/simpleweb:latest .
+$ docker run -p 8080:8080 stephangrinder/simpleweb:latest
+# 正常に稼働
+
+# 別窓を開いて...
+$ docker ps
+# 実行中のstephangrinder/simpleweb:latestのコンテナIdを取得する
+# コンテナ内部へアクセスする
+$ docker exec -it xxxxcontaineridxxxx sh
+/usr/app/ # ls
+# COPYで指定したディレクトリのコピーのみが表示された
+```
+
+上記の通り、カレントディレクトリが`/usr/app`になっている
+
+#### Unnecessary Rebuilds
+
+今、index.jsの内容を変更してみた。
+
+変更はどうやって反映させればいいだろうか？
+
+この変更はnodemonのように自動的に実行中のアプリケーションに反映されるわけではない。
+
+コンテナはイメージを基に実行しているので、
+
+イメージに変更を反映したレイヤを追加（反映）させないと意味がない。
+
