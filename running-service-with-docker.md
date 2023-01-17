@@ -205,5 +205,54 @@ Dockerに、`./blog/posts/`をフィードしてpostsのDockerイメージが生
 
 - **Service**: 実行中のコンテナにアクセスするための覚えやすい URL を提供します
 
+## Notes on Config files
 
-#### Notes of Kubernetes Config Settings
+設定ファイルについての注意点。
+
+「オブジェクト」：KUbernetesで作成するデプロイメント、ポッド、サービスなどを総称してオブジェクトと呼ぶ。
+
+Kubernetes Config files:
+
+- Kubernetesへ、生成したい様々なデプロイメント、ポッド、サービスについて伝えるファイル。
+
+- YAMLで書く。
+
+- 常時プロジェクトのソースコードのある場所へ保存しておくこと。
+
+- 設定ファイル抜きにオブジェクトを生成することなかれ。設定ファイルは、クラスタが何を実行しているかの正確な定義を提供するモノである。
+
+
+公式でも設定ファイル抜きでオブジェクトを作るチュートリアルなどあるが、必ず設定ファイルは生成せよとのこと。
+
+
+#### Creating Pod
+
+```bash
+$ cd posts/
+# 
+$ docker build -t stephansgrinder/posts:0.0.1 .
+
+$ mkdir infra/
+$ mkdir infra/k8s
+$ touch infra/k8s posts.yml
+```
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata: 
+    name: posts
+spec:
+    containers:
+        - name: posts
+          image: stephangrinder/posts:0.0.1
+```
+
+設定ファイルからオブジェクト（pod)を生成する
+
+```bash
+$ cd ../infra/k8s
+$ kubectl apply -f posts.yaml
+pod/posts created
+$
+```
