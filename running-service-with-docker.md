@@ -85,3 +85,53 @@ CMD ["npm", "start"]
 ```dockerignore
 node_moodules
 ```
+
+
+#### Review some basic commands
+
+コマンドの復讐
+
+```bash
+# カレントディレクトリのDockerfileをもとにどっかーイメージを生成し、タグ付けしている
+$ docker build -t stephangrinder/posts .
+# ドッカーイメージをコンテナに展開して実行する
+$ docker run <image-id or image tag>
+# ドッカーイメージをコンテナに展開してデフォルトコマンドを上書きする
+$ docker run -it <image-id or image tag> <cmd>
+# cmdを指定の実行中コンテナ内部で実行させる
+$ docker exec -it <container-id> <cmd>
+# そのコンテナ内のプライマリプロセスが出力したログを表示してくれる
+$ docker logs <container-id>
+```
+
+#### Dockering other services
+
+`./blog/posts/`に作ったDockerfileと.dockerignoreをすべてのサービスルートディレクトリ貼り付ける。
+
+#### Installing Kubernetes
+
+Kubernetesは異なるコンテナをまとめて実行するためのツールである。
+
+TODO: それを行う前にwslのスナップショットをとっておこう。
+
+```powershell
+PS C:\Users\user1> cd wsl_snapshot
+# wslじょうのディストリビューションを確認して
+PS C:\Users\user1> wsl -l -v
+# ディストリビューションを指定する。
+# Ubuntu-20.04かも
+PS C:\Users\user1>  wsl --export Ubuntu wsl_snapshot_after_installed_docker
+```
+参考
+
+https://qiita.com/PoodleMaster/items/b54db3608c4d343d27c4
+
+minikube installation
+
+https://minikube.sigs.k8s.io/docs/start/
+
+https://qiita.com/XPT60/items/ef9fbe82127b5b559b44
+
+https://kubernetes.io/ja/docs/tasks/tools/install-kubectl/
+
+講義では`MicroK8`を使うなとのこと。
