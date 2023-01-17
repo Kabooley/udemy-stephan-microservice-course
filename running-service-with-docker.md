@@ -135,3 +135,75 @@ https://qiita.com/XPT60/items/ef9fbe82127b5b559b44
 https://kubernetes.io/ja/docs/tasks/tools/install-kubectl/
 
 講義では`MicroK8`を使うなとのこと。
+
+手順まとめ：
+
+```bash
+# Ubuntu-2004 on WSL2 へ kubectl, Minikubeのインストール
+# 
+# 参考
+# https://kubernetes.io/ja/docs/tasks/tools/install-kubectl/
+$ cd ~
+$ curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+# パーミッション
+$ chmod +x ./kubectl
+# 確認
+$ kubectl version --client
+# 設定の検証
+$ kubectl cluster-info
+# The connection to the server <server-name:port> was refused - did you specify the right host or port?
+
+# minikubeが必要であるということらしい
+$ curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 73.1M  100 73.1M    0     0  3978k      0  0:00:18  0:00:18 --:--:-- 5356k
+$ sudo install minikube-linux-amd64 /usr/local/bin/minikube
+$ minikube start
+😄  minikube v1.28.0 on Ubuntu 20.04
+✨  Automatically selected the docker driver. Other choices: ssh, none
+
+🧯  The requested memory allocation of 2200MiB does not leave room for system overhead (total system  memory: 2990MiB). You may face stability issues.
+💡  Suggestion: Start minikube with less memory allocated: 'minikube start --memory=2200mb'
+
+📌  Using Docker driver with root privileges
+👍  Starting control plane node minikube in cluster minikube
+🚜  Pulling base image ...
+💾  Downloading Kubernetes v1.25.3 preload ...
+    > preloaded-images-k8s-v18-v1...:  385.44 MiB / 385.44 MiB  100.00% 2.03 Mi
+    > gcr.io/k8s-minikube/kicbase:  386.27 MiB / 386.27 MiB  100.00% 1.88 MiB p
+    > gcr.io/k8s-minikube/kicbase:  0 B [_______________________] ?% ? p/s 2m2s
+🔥  Creating docker container (CPUs=2, Memory=2200MB) ...
+🐳  Preparing Kubernetes v1.25.3 on Docker 20.10.20 ...
+    ▪ Generating certificates and keys ...
+    ▪ Booting up control plane ...
+    ▪ Configuring RBAC rules ...
+🔎  Verifying Kubernetes components...
+    ▪ Using image gcr.io/k8s-minikube/storage-provisioner:v5
+🌟  Enabled addons: default-storageclass, storage-provisioner
+🏄  Done! kubectl is now configured to use "minikube" cluster and "default" namespace by default
+$ 
+```
+
+ひとまずインストールはできたみたい。
+
+#### Kubernetes tour
+
+Dockerに、`./blog/posts/`をフィードしてpostsのDockerイメージが生成された。
+
+これでposts/のコンテナをいくらでも複製できるようになった。
+
+これからこれらコンテナを管理するKubernetesが扱うところの、クラスターについて。
+
+- **Kubernetes Cluster**: Nodeのコレクションであり、それらの管理マスターである。
+
+- **Node**: コンテナを実行するVM。要はコンテナを実行する器。
+
+- **Pod**: 1つ以上のコンテナを実行できる、Node上に存在する概念
+
+- **Deployment**: Podsを監視する。Podsを実行させたり再起動させたりする。
+
+- **Service**: 実行中のコンテナにアクセスするための覚えやすい URL を提供します
+
+
+#### Notes of Kubernetes Config Settings
