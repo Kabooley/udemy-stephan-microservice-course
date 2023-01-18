@@ -412,4 +412,66 @@ deployment.apps/posts-depl created
 $ kubectl get deployments
 NAME         READY   UP-TO-DATE   AVAILABLE   AGE
 posts-depl   0/1     1            0           14m
+
+# Deploymentが管理しているpodが削除されても、
+# Deploymentが自動的に新しいpodを作成する
+$ kubectl get pods
+NAME                          READY   STATUS             RESTARTS   AGE
+posts                         0/1     ImagePullBackOff   0          102m
+posts-depl-847877c748-ckdrd   0/1     ImagePullBackOff   0          34m
+$ kubectl delete pod posts-depl-847877c748-ckdrd
+pod "posts-depl-847877c748-ckdrd" deleted
+# posts-depl-~が再度作成されているのがわかる。
+# ただし、末尾の半角英筋が異なる
+$ kubectl get pods
+NAME                          READY   STATUS              RESTARTS   AGE
+posts                         0/1     ImagePullBackOff    0          103m
+posts-depl-847877c748-4snn8   0/1     ContainerCreating   0          5s
+
+# Deploymentの詳細を出力する
+$ kubectl describe deployment posts-depl
+Name:                   posts-depl
+Namespace:              default
+CreationTimestamp:      Wed, 18 Jan 2023 20:46:47 +0900
+Labels:                 <none>
+Annotations:            deployment.kubernetes.io/revision: 1
+Selector:               app=posts
+Replicas:               1 desired | 1 updated | 1 total | 0 available | 1 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=posts
+  Containers:
+   posts:
+    Image:        stephangrinder/posts:0.0.1
+    Port:         <none>
+    Host Port:    <none>
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      False   MinimumReplicasUnavailable
+  Progressing    True    ReplicaSetUpdated
+OldReplicaSets:  <none>
+NewReplicaSet:   posts-depl-847877c748 (1/1 replicas created)
+Events:
+  Type    Reason             Age   From                   Message
+  ----    ------             ----  ----                   -------
+  Normal  ScalingReplicaSet  41m   deployment-controller  Scaled up replica set posts-depl-847877c748 to 1
+
+
+# delete deploymentでデプロイメントとそのデプロイメントが管理するpod等も削除される
+$ kubectl delete deployment deployment.apps/posts-depl
+error: there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'kubectl get resource/<resource_name>' instead of 'kubectl get resource resource/<resource_name>'
+$ kubectl delete deployment.apps/posts-depl
+deployment.apps "posts-depl" deleted
+$ kubectl get deployment
+No resources found in default namespace.
+$ kubectl get pods
+NAME    READY   STATUS             RESTARTS   AGE
+posts   0/1     ImagePullBackOff   0          116m
+$
 ```
