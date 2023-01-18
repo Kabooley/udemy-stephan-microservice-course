@@ -1,5 +1,53 @@
 # Note: Seciton3: Running services with Docker
 
+## 参考
+
+書籍：
+
+『Docker/Kubernetes実践コンテナ開発入門』が詳しい。
+
+講義の内容を完全にカバーしている。
+
+Docs:
+
+https://kubernetes.io/docs/concepts/overview/
+
+https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/
+
+## Kubernetsのマニフェスト
+
+https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/#required-fields
+
+必須フィールド：
+
+```bash
+# apiVersion: どのKubernetes APIバージョンを使ってオブジェクトを生成するのか指定する
+apiVersion: apps/v1
+# kind: どんなオブジェクトを作るのか指定する
+kind: Deployment
+# metadata: オブジェクトを一意に識別するためのnameまたはUIDまたはnamespaceを含めた情報
+metadata:
+  name: nginx-deployment
+# spec: オブジェクトにどんな状態を望むのか定義する
+# ネストさせて詳しい内容を定義する
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 2 # tells deployment to run 2 pods matching the template
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+```
+
+> 正しい`spec`の定義はkubernetesオブジェクトによって異なる。
 
 ## deployの問題
 
@@ -15,7 +63,7 @@ Azure? AWS? GCP?などのような仮想マシンをレンタルするのがい�
 
 問題は単純にコピーしたサーバは別々のポート番号を割り当てられることである。
 
-現状すべてのサーバはポート番号を知っていることを前提に構築されているので
+現状アプリケーションはすべてのサーバはポート番号を知っていることを前提に構築されているので、
 
 これだとうまくいかない
 
@@ -55,6 +103,14 @@ Dockerはすべてをラッピングして同じ環境、同じ起動方法で�
 > いくつかのプログラムを実行するように Kubernetes に指示します。
 > これを行うと、プログラムが取得され、これらのノードの 1 つによって実行されるように多かれ少なかれランダムに割り当てられます。
 > 繰り返しますが、ノードは実際には単なる仮想マシンです。
+
+クラスタ：Kubernetesの様々なリソースを管理する集合体である。クラスタはNode, MasterNodeを抱える。
+
+Node: Kubernetesクラスタの管理下に登録されているDocker(コンテナ)ホストのこと。
+
+Pod: コンテナ集合体の単位で、コンテナを実行する方法を定義する。
+
+
 
 #### Docker Recapping
 
@@ -255,4 +311,105 @@ $ cd ../infra/k8s
 $ kubectl apply -f posts.yaml
 pod/posts created
 $
+```
+```bash
+# クラスタの中のpodsの一覧を表示する
+$ kubectl get pods
+```
+
+#### Understand a Pod spec
+
+https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/
+
+#### Common kubectl commands
+
+Dockerコマンドはあまり使わなくなって、Kubectlのコマンドを代わりに使うようになってくる
+
+```bash
+# クラスタのpod一覧を表示する
+$ kubectl get pods
+# 実行中のpod内で与えられたcmdを実行させる
+$ kubectl exec -it [pod-name] [cmd]
+# 指定のpodのログを出力する
+$ kubectl logs [pod-name]
+# 指定のpodを削除する
+$ kubectl delete pod [pod-name]
+# 設定を反映させる
+$ kubectl apply -f [config file name]
+# 実行中のpodの何らかの情報を出力する
+$ kubectl describe pod [pod-name]
+```
+#### エイリアスで時間の節約
+
+要は指定のコマンドの短縮形を登録してコマンド入力の煩わしさを緩和しようという話
+
+## デプロイメント
+
+#### デプロイメントの導入
+
+通常podは直接作成するのではなくて、代わりにデプロイメントと呼ばれるものを作成する。
+
+もっというと、ReplicaSetというクラスタのリソースがpodsを管理し、
+
+DeploymentがReplicaSetを管理するのである。
+
+こんな感じ？
+
+`Deployment --> create --> ReplicaSet --> create --> [pod1, pod2, pod3,...]`
+
+たとえば、
+
+podの一つがクラッシュしたときに、
+
+podを管理するReplicaSetまたはDeploymentがそのpodを削除して改めて復元する...
+
+みたいなことができる。
+
+講義ではこの時はReplicaSetは作っていない。
+
+Deploymentのconfig
+
+```yaml
+# スペースとタブなどホワイトスペース厳密にしないとよみとられないめんどい
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: posts-depl
+spec:
+    replicas: 1
+    selector: 
+        matchLabels:
+            app: posts
+    template:
+        metadata: 
+            labels:
+                app: posts
+        spec: 
+            containers: 
+              - name: posts
+                image: stephangrinder/posts:0.0.1
+```
+
+#### デプロイメントのコマンド意味
+
+```bash
+# Deploymentの一覧を表示する。docker psと同じ。
+$ kubectl get deployments
+# まぁあとあpodの時と同じかと
+$ kubectl describe deployment [depl-name] 
+$ kubectl apply -f [config file name]
+$ kubectl delete deployment [depl-name]
+```
+
+```bash
+# Deploymentの生成
+$ kubectl apply -f blog/posts/infra/k8s/posts-depl.yaml
+deployment.apps/posts-depl created
+# Deploymentの一覧の表示
+# 
+# READYは、稼働中のポッドの数/使用可能な準備万端なポッドの数
+# AVAILABLEは、
+$ kubectl get deployments
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+posts-depl   0/1     1            0           14m
 ```
