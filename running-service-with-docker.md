@@ -203,6 +203,7 @@ $ cd ~
 $ curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
 # パーミッション
 $ chmod +x ./kubectl
+$ sudo mv ./kubectl /usr/local/bin/kubectl
 # 確認
 $ kubectl version --client
 # 設定の検証
@@ -210,6 +211,8 @@ $ kubectl cluster-info
 # The connection to the server <server-name:port> was refused - did you specify the right host or port?
 
 # minikubeが必要であるということらしい
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
 $ curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
