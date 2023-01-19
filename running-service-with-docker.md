@@ -478,3 +478,338 @@ NAME    READY   STATUS             RESTARTS   AGE
 posts   0/1     ImagePullBackOff   0          116m
 $
 ```
+
+#### 非推奨：Deploymentを更新する方法
+
+NOTE: 以下の方法は頻繁に使われる手法ではない。
+
+理由は変更を加えるたびにyamlのバージョンの値を更新しなくてはならない。
+
+これはエラーの引き金になりやすいらしい。
+
+タイプミスとか、バージョン番号間違えたりとか。
+
+よりよい方法は次のレクチャーで。
+
+steps:
+
+- ローカルでファイルの変更を行う
+- イメージを指定してリビルド
+- Deploymentのコンフィグファイルではバージョンだけ更新する
+- 実行：`kubectl apply -f [depl file name]`
+
+NOTE: kubenetesにはyamlの変更のたびに変更を適用させないと認識してくれないよ
+
+kubernetesはconfigファイルのapplyを実行されるたびに、
+
+構成ファイルが既存のものか新規化を認識して
+
+オブジェクトを更新するだけか新しく作るのかを決定する。
+
+```bash
+# posts/index.jsを変更した
+$ cd blog/posts
+$ docker build -t stephangrinder/posts:0.0.5 .
+Sending build context to Docker daemon  109.6kB
+Step 1/6 : FROM node:alpine
+ ---> 17299c0421ee
+Step 2/6 : WORKDIR /app
+ ---> Using cache
+ ---> 04e3e8692010
+Step 3/6 : COPY package.json ./
+ ---> Using cache
+ ---> 6941117486f6
+Step 4/6 : RUN npm install
+ ---> Using cache
+ ---> daf48a995513
+Step 5/6 : COPY ./ ./
+ ---> 0d2484197713
+Step 6/6 : CMD ["npm", "start"]
+ ---> Running in 40e8650caa43
+Removing intermediate container 40e8650caa43
+ ---> f5a52042225f
+Successfully built f5a52042225f
+Successfully tagged stephangrinder/posts:0.0.5
+# posts-depl.yamlのバージョン情報を更新した
+# この変更を適用させる
+$ cd infra/k8s
+$ ls
+posts-del.yaml
+# 構成ファイルの変更の適用
+# `created`なら新規にオブジェクトを生成した
+# `configured`なら既存のオブジェクトを更新した
+# 今回は新規である
+$ kubectl apply -f posts-depl.yaml
+deployment.apps/posts-depl created
+```
+
+変更内容
+
+```yaml
+# 前略...
+# posts:0.0.5
+        spec: 
+            containers: 
+              - name: posts
+                image: stephangrinder/posts:0.0.5
+```
+
+#### 推奨：Deploymentの更新する方法
+
+NOTE: dockerイメージのタグ付けについて[docker-pushの注意](#docker-pushの注意)
+
+STEPS:
+
+- deployment(yaml)は必ず`pod spec`に`latest`を適用させなくてはならないようにする
+- 既存ファイルを変更する
+- Dockerイメージをビルドする
+- イメージをDockerhubへpushする
+- 次のコマンドを実行する：`kubectl rollout restart deployment [depl-name]`
+
+
+```yaml
+# 前略...
+# posts:latest
+        spec: 
+            containers: 
+              - name: posts
+                # image: stephangrinder/posts:latest
+                # もしくは、バージョンを省略する
+                image: stephangrinder/posts
+```
+```bash
+$ pwd 
+posts/
+# posts-depl.yamlに上記の変更を程したのち...
+$ kubectl apply -f infra/k8s/posts-depl.yaml
+deployment.apps/posts-depl configured
+# posts/index.jsに変更を施したのち...
+$ docker build -t $username/posts .
+...
+Successfully built 3d515f32674b
+Successfully tagged $username/posts:latest
+# それをDockerhubへプッシュする
+$ docker push $username/posts
+# タグ付けで`latest`が付与される
+Using default tag: latest
+The push refers to repository [docker.io/$username/posts]
+165089ca7613: Pushed 
+59c0dc796a42: Pushed 
+d8508afcc3f2: Pushed 
+65ab454ea515: Pushed 
+6d0edcc4175b: Pushed 
+887a67b27874: Pushed 
+a49d675cd49c: Pushed 
+8e012198eea1: Pushed 
+latest: digest: sha256:c3beb5d0fb8892f485e1b26d1165d60de20f56c3089ff693619fe3f6ad4c9589 size: 1992
+
+
+
+$ kubectl get deployments
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+posts-depl   1/1     1            1           58m
+$ kubectl rollout restart deployment posts-depl
+deployment.apps/posts-depl restarted
+$ kubectl get deployments
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+posts-depl   1/1     1            1           58m
+$ kubectl get pods
+NAME                         READY   STATUS    RESTARTS   AGE
+posts-depl-84c5c5bdb-tsm4m   1/1     Running   0          29s
+$ kubectl logs posts-depl-84c5c5bdb-tsm4m
+
+> posts@1.0.0 start
+> nodemon index.js
+
+[nodemon] 2.0.20
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): *.*
+[nodemon] watching extensions: js,mjs,json
+[nodemon] starting `node index.js`
+# 変更内容が適用されている！
+v55
+Listening on 4000
+```
+
+## サービス
+
+Kubernetesのクラスターの「サービス」オブジェクトについて。
+
+> Podの集合にアクセスするための経路を定義する。
+
+#### サービスによるネットワーキング
+
+サービスの役割。
+クラスターの外との通信の為にサービスが活躍する。
+特定のpodへのアクセス制御など。
+
+Serviceのタイプ：
+
+- Cluster IP: podへアクセスするための覚えやすいURLを用意する。Cluster内部にのみ公開される。
+- Node Port: Clusterの外部からPodへアクセスできるようにするためのポート番号。通常開発にのみ利用される。
+- Load Balancer: Clusterの外部からPodへアクセスできるようにするためのもの。これはpodを外部へ公開するための正しい方法である。
+- External Name: 省略
+
+
+同一クラスター内のPod間で通信するために必要なサービスは？
+
+Clust IPを使う。理由はクラスター内部にのみ公開されるアクセス方法だから。
+
+ローカルブラウザからクラスタ内部へアクセスるための手段を提供できるサービスは？
+
+ロードバランサー。
+
+#### Node Port Serviceの作成
+
+ロードバランサーは追加構成要素をたくさん用意しなくてはならず大変なので
+
+Nodeportを用いる。
+
+もちろん開発の為だけであるので、アプリケーションを公開したらNodePortは使わない。
+
+Serviceのconfigファイル：
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: posts-srv
+spec:
+  # NodePortをここで指定する
+  type: NodePort
+  selector:
+    app: posts
+  ports:
+    - name: posts
+      protocol: TCP
+      # NodePortへのポート番号
+      port: 4000
+      # Podへのポート番号
+      targetPort: 4000
+```
+
+ポート番号の決まり方：
+
+```
+クラスター外部
+||
+\/
+NodePort `Port 3xxxx`
+||
+\/
+----------------------------------
+| Cluster                         |
+|                                 |
+|   Port 4000 --> NodePortService |
+|                                 |
+|   --> TargetPort 4000 --> Pod   |
+----------------------------------
+```
+
+#### Node Portサービスへのアクセス
+
+```bash
+$ kubectl apply -f infra/k8s/posts-srv.yaml
+service/posts-srv created
+$ kubectl get services
+NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP          46h
+posts-srv    NodePort    10.110.111.51   <none>        4000:30183/TCP   11s
+$ kubectl describe service posts-srv
+Name:                     posts-srv
+Namespace:                default
+Labels:                   <none>
+Annotations:              <none>
+Selector:                 app=posts
+Type:                     NodePort
+IP Family Policy:         SingleStack
+IP Families:              IPv4
+IP:                       10.110.111.51
+IPs:                      10.110.111.51
+Port:                     posts  4000/TCP
+TargetPort:               4000/TCP
+# ここがNodePrtのポート番号
+NodePort:                 posts  30183/TCP
+Endpoints:                172.17.0.3:4000
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Events:                   <none>
+```
+
+つまり30183
+
+30183 --> 4000 --> 4000と解決されていく。
+
+ローカルマシンから：`localhost:30183/posts`
+
+Minikube: (マシンや割り当てに依て異なるアクセスIPアドレス):30183/posts
+
+## `docker push`の注意
+
+tag名はdocker accountのusernameを必ず指定すること。
+
+さもないとpushは拒否される。
+
+```bash
+$ docker login -u $username
+password:
+
+Login Succeeded
+# 拒否される。
+$ docker push stephangrinder/posts 
+...
+denied: requested access to the resource is denied
+
+# $usernameに変更したので...
+$ docker build -t $usename/posts .
+# pushは受け入れられた!
+$ docker push $username/posts
+Using default tag: latest
+The push refers to repository [docker.io/kabooley/posts]
+165089ca7613: Pushed 
+59c0dc796a42: Pushed 
+d8508afcc3f2: Pushed 
+65ab454ea515: Pushed 
+6d0edcc4175b: Pushed 
+887a67b27874: Pushed 
+a49d675cd49c: Pushed 
+8e012198eea1: Pushed 
+latest: digest: sha256:c3beb5d0fb8892f485e1b26d1165d60de20f56c3089ff693619fe3f6ad4c9589 size: 1992
+```
+
+
+## Error
+
+#### STATUS:ErrImagePull
+
+```bash
+$ docker get pods
+NAME                         READY   STATUS         RESTARTS   AGE
+posts-depl-6c8b45c68-vjndf   0/1     ErrImagePull   0          15s
+```
+
+みたいなとき！
+
+#### WTF is ErrImagePull & ImagePullBackOff?
+
+内部のkubeletと呼ばれるイメージをプルする仕事を担うプログラムが何かしらのエラーを出した状態。
+
+- `ImagePullBackOff`: Imageをpullするときに、pathが違っていた、networkが切断されたなどのネットワークトラブルに見舞われた、kubeletが認証に失敗した
+
+- `ErrImagePull`: Kubernetes は最初に ErrImagePull エラーをスローし、数回再試行した後、「引き戻し」、別のダウンロードの試行をスケジュールします。試行が失敗するたびに、遅延は最大 5 分まで指数関数的に増加します。
+
+結局どうすればいいのかはまとめていない...
+
+## Minikube basic control
+
+https://minikube.sigs.k8s.io/docs/handbook/controls/
+
+#### `minikube dashboard`
+
+> Access the Kubernetes dashboard running within the minikube cluster:
+
+ということで、
+
+実行中のクラスタをモニタリングしてビジュアル表示してくれるコマンド。
+
+指定のURLが出力されて、そのURLにアクセスすると今クラスターがどんな状態なのかがわかるページが表示される。
