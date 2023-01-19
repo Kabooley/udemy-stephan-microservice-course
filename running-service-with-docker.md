@@ -744,7 +744,218 @@ Events:                   <none>
 
 Minikube: (マシンや割り当てに依て異なるアクセスIPアドレス):30183/posts
 
-## `docker push`の注意
+#### Clust IP Serviceの設定
+
+ClusterIPの役割はpodをクラスター内の他のpodへ公開することである。
+
+今、一つのNodeにpodが2つあるとする。
+
+postとevent-busである。
+
+pod同士は直接やり取りすることはできない。
+
+podに割り当てられるipアドレスを事前に知ることができないからである。
+
+この互いのIPアドレスがなんであるのかをClustIPServiceが管理する。
+
+前のセクションで作っていたアプリケーションでは
+
+各サービスがevent-busへ通信を、またはその逆を行っていたが
+
+今後は具体的にどのURLでアクセスすればいいのか事前に知るすべがなくなるので
+
+各サービスへアクセスする代わりに、ClustIpサービスへあくせすするようにする。
+
+posts --> event-busが
+
+posts --> event-busのClustIpService --> event-bus
+
+もしくは
+
+event-bus --> postsが,
+
+event-bus --> postsのClustIpService --> posts
+
+という具合に通信の間に立ってもらうようになる。
+
+#### event-busのdeploymentの構築
+
+event-busのイメージを構築する
+
+そのイメージをDockerhubへpushする
+
+event-busのdeploymentを作成する
+
+postsとevent-busのClusterIPサービスを構築する
+
+```bash
+# event-busのイメージの生成
+$ docker build -t $username/event-bus .
+...
+Successfully built 83c698f1eb68
+Successfully tagged kabooley/event-bus:latest
+$ docker login -u kabooley
+Password: 
+
+...
+Login Succeeded
+# イメージのpush
+$ docker push kabooley/event-bus 
+Using default tag: latest
+The push refers to repository [docker.io/kabooley/event-bus]
+726cdbd61825: Pushed 
+f0b59e71cf8e: Pushed 
+4a936045809d: Pushed 
+7ffc5b42c0e0: Pushed 
+6d0edcc4175b: Mounted from library/node 
+887a67b27874: Mounted from library/node 
+a49d675cd49c: Mounted from library/node 
+8e012198eea1: Mounted from library/node 
+...
+$ cd ../infra/k8s
+# deploymentの作成
+# 内容はposts-depl.yamlと同じ
+$ kubectl apply -f event-bus-depl.yaml
+deployment.apps/event-bus-depl created
+```
+#### ClusterIPServiceの定義
+
+deploymentファイルにClustIPServiceの内容を追記する。
+
+一つのconfigファイルに複数のオブジェクトを定義してもいいらしい。
+
+`---`で区切る。
+
+```yaml
+# event-bus-depl.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: event-bus-srv
+spec:
+    selector:
+        app: event-bus
+    # type: ClusterIP # 省略可能とのこと
+    ports: 
+        - name: event-bus
+          protocol: TCP
+          port: 4005
+          targetPort: 4005
+```
+
+```bash
+
+$ kubectl apply -f event-bus-depl.yaml
+deployment.apps/event-bus-depl unchanged
+service/event-bus-srv created
+$ kubectl get services
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+event-bus-srv   ClusterIP   10.100.192.116   <none>        4005/TCP         2m16s
+kubernetes      ClusterIP   10.96.0.1        <none>        443/TCP          24h
+posts-srv       NodePort    10.96.85.190     <none>        4000:31660/TCP   18s
+```
+
+```yaml
+# posts-depl.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: posts-clusterip-srv
+spec:
+    selector:
+        app: posts
+    # type: ClusterIP # 省略可能とのこと
+    ports: 
+        - name: posts
+          protocol: TCP
+          port: 4000
+          targetPort: 4000
+```
+
+```bash
+$ kubectl apply -f posts-depl.yaml
+deployment.apps/posts-depl unchanged
+service/posts-clusterip-srv created
+$ kubectl get services
+NAME                  TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+event-bus-srv         ClusterIP   10.100.192.116   <none>        4005/TCP         11m
+kubernetes            ClusterIP   10.96.0.1        <none>        443/TCP          25h
+posts-clusterip-srv   ClusterIP   10.105.72.116    <none>        4000/TCP         5s
+posts-srv             NodePort    10.96.85.190     <none>        4000:31660/TCP   9m33s
+```
+
+#### How to communicate between Services
+
+posts/index.jsではevent-busと通信するときのURLが基地である全逓のコードになっている。
+
+(他のサービスもすべてそうなのだけども)
+
+今、クラスター内部でClusterIPサービスに代わりに通信してもらう都合上、
+
+URLは既知でない。
+
+どうすればいいか？
+
+```JavaScript
+// posts/index.js
+app.post('/posts', async (req, res) => {
+    const id = randomBytes(4).toString('hex');
+    const { title } = req.body;
+    
+    posts[id] = {
+        id, title
+    };
+
+    await axios.post('http://localhost:4005/events', {
+        type: 'PostCreated',
+        data: {
+            id, title
+        }
+    });
+
+    res.status(201).send(posts[id]);
+});
+```
+
+次のようにすればよい。
+
+```
+posts --> event-busのClustIpService --> event-bus
+posts --> HTTPRequest`http://event-bus-srv --> `event-busのClustIpService --> event-bus
+```
+
+つまり、
+
+localhost:portnumber から アクセスしたいサービス（アプリケーションのマイクロサービスという意味のサービス）のサービス（Kubernetesの言うところのサービス）へ置き換えればいいだけ。
+
+
+
+
+## DockerHubの利用
+
+#### 基本の流れ
+
+https://docs.docker.com/docker-hub/repos/
+
+```bash
+$ docker build -t $usename/posts .
+$ docker push $username/posts
+Using default tag: latest
+The push refers to repository [docker.io/kabooley/posts]
+165089ca7613: Pushed 
+59c0dc796a42: Pushed 
+d8508afcc3f2: Pushed 
+65ab454ea515: Pushed 
+6d0edcc4175b: Pushed 
+887a67b27874: Pushed 
+a49d675cd49c: Pushed 
+8e012198eea1: Pushed 
+latest: digest: sha256:c3beb5d0fb8892f485e1b26d1165d60de20f56c3089ff693619fe3f6ad4c9589 size: 1992
+```
+
+#### `docker push`の注意
 
 tag名はdocker accountのusernameを必ず指定すること。
 
@@ -777,6 +988,7 @@ a49d675cd49c: Pushed
 latest: digest: sha256:c3beb5d0fb8892f485e1b26d1165d60de20f56c3089ff693619fe3f6ad4c9589 size: 1992
 ```
 
+#### 
 
 ## Error
 
@@ -813,3 +1025,4 @@ https://minikube.sigs.k8s.io/docs/handbook/controls/
 実行中のクラスタをモニタリングしてビジュアル表示してくれるコマンド。
 
 指定のURLが出力されて、そのURLにアクセスすると今クラスターがどんな状態なのかがわかるページが表示される。
+
