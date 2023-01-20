@@ -930,7 +930,75 @@ posts --> HTTPRequest`http://event-bus-srv --> `event-busのClustIpService --> e
 
 localhost:portnumber から アクセスしたいサービス（アプリケーションのマイクロサービスという意味のサービス）のサービス（Kubernetesの言うところのサービス）へ置き換えればいいだけ。
 
+```JavaScript
+// posts/index.js
+app.post('/posts', async (req, res) => {
 
+
+  // localhost --> event-bus-srv
+    await axios.post('http://event-bus-srv:4005/events', {
+        type: 'PostCreated',
+        data: {
+            id, title
+        }
+    });
+
+    res.status(201).send(posts[id]);
+});
+
+```
+```JavaScript
+// event-bus/index.js
+app.post('/events', (req, res) => {
+    const event = req.body;
+
+    // NOTE: イベントを保存する
+    event.pus(event);
+
+    axios.post("http://localhost:4000/events", event).catch((err) => {
+        console.log(err.message);
+    });
+    // axios.post("http://localhost:4001/events", event).catch((err) => {
+    //     console.log(err.message);
+    // });
+    // axios.post("http://localhost:4002/events", event).catch((err) => {
+    //     console.log(err.message);
+    // });
+    // axios.post("http://localhost:4003/events", event).catch((err) => {
+    //     console.log(err.message);
+    // });
+    res.send({status: 'OK'});
+});
+```
+ローカルファイルを更新したので改めてdockerイメージを生成する
+
+```bash
+$ docker build -t $username/posts .
+$ docker build -t $username/event-bus .
+# 両方docker pushして...
+$ dcoker rollout restart deployment posts-depl
+$ dcoker rollout restart deployment event-bus-depl
+# deploymentを再起動した
+
+```
+
+#### postsmanでHTTP通信
+
+どんなURLならCluster内部にアクセスできるんだい？
+
+```bash
+$ kubectl get services
+NAME                  TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+event-bus-srv         ClusterIP   10.101.89.14    <none>        4005/TCP         12m
+kubernetes            ClusterIP   10.96.0.1       <none>        443/TCP          2d23h
+posts-clusterip-srv   ClusterIP   10.96.246.193   <none>        4000/TCP         12m
+posts-srv             NodePort    10.110.111.51   <none>        4000:30183/TCP   25h
+
+```
+
+アクセスできない！
+
+TODO: 原因の追究
 
 
 ## DockerHubの利用
