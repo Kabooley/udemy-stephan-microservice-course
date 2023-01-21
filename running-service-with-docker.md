@@ -1000,6 +1000,76 @@ posts-srv             NodePort    10.110.111.51   <none>        4000:30183/TCP  
 
 TODO: 原因の追究
 
+## Minikubeで実行中のNodePortサービスURLにアクセスできないとき
+
+https://stackoverflow.com/questions/40767164/expose-port-in-minikube
+
+https://www.udemy.com/course/microservices-with-node-js-and-react/learn/lecture/19099832#questions/15081230
+
+```bash
+$ cd blog/posts/
+$ minikube service posts-srv --url
+http://127.0.0.1:39469
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+
+```
+
+> Use the tunnel url to access the nodeport. in this case: http://127.0.0.1:64906
+
+> Now add /posts to the url: http://127.0.0.1:64906/posts
+
+> That made it work for me. I haven´t yet tested if they work together but at least I can access the nodeport now.
+
+とにかくminikubeをLinuxで使う場合は、
+
+サービスオブジェクトを生成したらポートを手動でexposeしなくてはならないようで。
+
+```bash
+$ kubectl get services
+NAME                  TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+event-bus-srv         ClusterIP   10.101.89.14    <none>        4005/TCP         24h
+kubernetes            ClusterIP   10.96.0.1       <none>        443/TCP          4d
+posts-clusterip-srv   ClusterIP   10.96.246.193   <none>        4000/TCP         24h
+posts-srv             NodePort    10.110.111.51   <none>        4000:30183/TCP   2d1h
+$ kubectl expose service posts-src --type=NodePort 
+```
+
+#### `kubectl expose`:
+
+https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#expose
+
+新規のKubernetesサービスとしてリソースを公開する。
+
+> デプロイメント、サービス、レプリカセット、レプリケーションコントローラ、またはポッドを名前で検索し、そのリソースのセレクタを、指定されたポート上の新しいサービスのセレクタとして使用します。デプロイメントやレプリカセットは、そのセレクタがサービスがサポートするセレクタに変換可能な場合、つまりセレクタにmatchLabelsコンポーネントだけが含まれている場合にのみ、サービスとして公開されます。
+> もし --port でポートが指定されず、公開されたリソースが複数のポートを持つ場合、すべてのポートが新しいサービスによって再利用されることに注意してください。また、ラベルが指定されていない場合、新しいサービスは公開されているリソースからラベルを再利用します。
+
+#### Create a Service
+
+https://kubernetes.io/docs/tutorials/hello-minikube/#create-a-service
+
+> デフォルトではpodはクラスター内部でのみそのIPアドレスにアクセスできる。
+
+> （たとえば）`hello-worl`コンテナへ、Kubernetesのバーチャルネットワークの外部からアクセスしたい場合、podをKubernetesのサービスとして公開しなくてはならない。
+
+手順：
+
+1. `kubectl expose`コマンドで公開する。
+
+```bash
+$ kubectl expose service posts-srv --type=LoadBalancer --port=8080
+```
+`--type=LoadBalancer`:
+
+--typeでこのServiceのタイプを指定する。タイプは`ClustIp`, `NodePort`, `LoadBalancer`, `ExternalName`。デフォルトは`ClusterIP`。
+
+
+`--port=8080`: 
+
+サービスが提供されるポート。指定されていない場合は、公開されているリソースからコピーされます
+
+```bash
+
+```
 
 ## DockerHubの利用
 
