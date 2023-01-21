@@ -955,7 +955,7 @@ app.post('/events', (req, res) => {
     // NOTE: イベントを保存する
     event.pus(event);
 
-    axios.post("http://localhost:4000/events", event).catch((err) => {
+    axios.post("http://posts-clusterip-srv:4000/events", event).catch((err) => {
         console.log(err.message);
     });
     // axios.post("http://localhost:4001/events", event).catch((err) => {
@@ -998,41 +998,138 @@ posts-srv             NodePort    10.110.111.51   <none>        4000:30183/TCP  
 
 アクセスできない！
 
-TODO: 原因の追究
+下記の通りに解決した。
 
-## Minikubeで実行中のNodePortサービスURLにアクセスできないとき
+#### minikube issue: NodePort サービスへのホスト側からのアクセス手段
 
-https://stackoverflow.com/questions/40767164/expose-port-in-minikube
+参考：
 
-https://www.udemy.com/course/microservices-with-node-js-and-react/learn/lecture/19099832#questions/15081230
+https://minikube.sigs.k8s.io/docs/handbook/accessing/
+
+> The network is limited if using the Docker driver on Darwin, Windows, or WSL, and the Node IP is not reachable directly.
+
+> Running minikube on Linux with the Docker driver will result in no tunnel being created.
+
+> Services of type NodePort can be exposed via the minikube service <service-name> --url command. It must be run in a separate terminal window to keep the tunnel open. Ctrl-C in the terminal can be used to terminate the process at which time the network routes will be cleaned up.
+
+> Darwin、Windows、WSLでDockerドライバを使用した場合、ネットワークが制限され、Node IPに直接到達することができません。
+
+> Linux上でDockerドライバを使用してminikubeを実行すると、トンネルは作成されません。
+
+> NodePortタイプのサービスは、minikube service <service-name>--urlコマンドで公開することができます。トンネルを開いたままにするには、別のターミナルウィンドウで実行する必要があります。ターミナルのCtrl-Cで処理を終了させると、ネットワーク経路がクリーンアップされます。
+
+ということで、
+
+`minikube start`したターミナルとは別のターミナルを開く。
+
+その別ターミナルで`minikube service <service-name> --url`を実行する。
+
+そのターミナルが開かれている限り、トンネルが維持される。
+
+出力されたIPアドレスならホストがわからアクセスできる...という話。
+
+でその出力されたIPアドレスを使ってにアクセスしてみたところ、
+
+エラーになる。
+
+エラーはアプリケーションのなかでどうなっているか見てみたところ...
+
 
 ```bash
-$ cd blog/posts/
+$ kubectl logs posts-xxxxxx
+
+> posts@1.0.0 start
+> nodemon index.js
+
+[nodemon] 2.0.20
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): *.*
+[nodemon] watching extensions: js,mjs,json
+[nodemon] starting `node index.js`
+v55
+Listening on 4000
+/app/node_modules/axios/lib/core/createError.js:16
+  var error = new Error(message);
+              ^
+
+Error: Request failed with status code 500
+    at createError (/app/node_modules/axios/lib/core/createError.js:16:15)
+    at settle (/app/node_modules/axios/lib/core/settle.js:17:12)
+    at IncomingMessage.handleStreamEnd (/app/node_modules/axios/lib/adapters/http.js:269:11)
+    at IncomingMessage.emit (node:events:525:35)
+    at endReadableNT (node:internal/streams/readable:1359:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  config: {
+    url: 'http://event-bus-srv:4005/events',
+    method: 'post',
+    data: '{"type":"PostCreated","data":{"id":"8d5ae5e0","title":"title: Hard to access NodePort"}}',
+    headers: {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json',
+      'User-Agent': 'axios/0.21.4',
+      'Content-Length': 88
+    },
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformRespons
+# ...
+
+Node.js v19.4.0
+[nodemon] app crashed - waiting for file changes before starting...
+```
+
+とクラッシュしてそのままになっている模様。
+
+だからpostmanにはエラーが出力されているわけだ。
+
+みたところ、postmanからのbodyは、posts-srvには届いちゃいるみたい。
+
+`"title":"title: Hard to access NodePort"`を送信したので。
+
+ということは、postsにアクセスするところまではいけているはずなのでは？
+
+エラーは`http://event-bus-srv:4005/events`へのpostが失敗しているので
+
+event-busへのアクセスができていない模様。
+
+ということで
+
+`kubectl logs <event-bus-pod-name>`でログを確認すると
+
+タイポを発見したのでこれを修正。
+
+再度dockerイメージの作成、push、rolloutしてみて改めてkubectl serviceしてみる
+
+```bash
+# 本窓ターミナル
+$ cd blog/event-bus
+# タイポ修正
+$ docker build -t $username/event-bus .
+$ docker push $username/event-bus
+# deploymentを再起動する
+$ kubectl rollout restart deployment event-bus-depl
+$ kubectl rollout restart deployment posts-depl
+# 再起動によってpodが再作成されたのを確認
+$ kubectl get pods
+# 各podが正常に稼働しているのを確認
+$ kubectl logs <pod-name>
+```
+```bash
+# 別窓ターミナル
 $ minikube service posts-srv --url
-http://127.0.0.1:39469
+http://127.0.0.1:37255
 ❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
-
 ```
 
-> Use the tunnel url to access the nodeport. in this case: http://127.0.0.1:64906
+表示されたURLが、ホストOS側からアクセスできるクラスターへのIPアドレスである。
 
-> Now add /posts to the url: http://127.0.0.1:64906/posts
+これをポストマンに渡す。
 
-> That made it work for me. I haven´t yet tested if they work together but at least I can access the nodeport now.
+`POST http://127.0.0.1:37255/posts?Content-Type=application/json`
 
-とにかくminikubeをLinuxで使う場合は、
+status: 201で正常に終了した!!
 
-サービスオブジェクトを生成したらポートを手動でexposeしなくてはならないようで。
+長かった～
 
-```bash
-$ kubectl get services
-NAME                  TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-event-bus-srv         ClusterIP   10.101.89.14    <none>        4005/TCP         24h
-kubernetes            ClusterIP   10.96.0.1       <none>        443/TCP          4d
-posts-clusterip-srv   ClusterIP   10.96.246.193   <none>        4000/TCP         24h
-posts-srv             NodePort    10.110.111.51   <none>        4000:30183/TCP   2d1h
-$ kubectl expose service posts-src --type=NodePort 
-```
 
 #### `kubectl expose`:
 

@@ -12,9 +12,9 @@ app.post('/events', (req, res) => {
     const event = req.body;
 
     // NOTE: イベントを保存する
-    event.pus(event);
+    events.push(event);
 
-    axios.post("http://localhost:4000/events", event).catch((err) => {
+    axios.post("http://posts-clusterip-srv:4000/events", event).catch((err) => {
         console.log(err.message);
     });
     // axios.post("http://localhost:4001/events", event).catch((err) => {

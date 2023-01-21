@@ -9,8 +9,8 @@ spec:
             app: posts
     template:
         metadata: 
-            labels:
-                app: posts
+          labels:
+            app: posts
         spec: 
             containers: 
               - name: posts
