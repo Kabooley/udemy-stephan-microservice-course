@@ -1130,15 +1130,37 @@ status: 201で正常に終了した!!
 
 長かった～
 
+本当はVSCodeのThunderClientを使いたかったのだけど、
 
-#### `kubectl expose`:
+同じ方法ではうまくいかないので一旦保留。
 
-https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#expose
+#### Surface環境でなんかまた同じ問題に出くわした件
 
-新規のKubernetesサービスとしてリソースを公開する。
+どうもhost --> Cluster NodePort --> postsまではいいのだけれど、
 
-> デプロイメント、サービス、レプリカセット、レプリケーションコントローラ、またはポッドを名前で検索し、そのリソースのセレクタを、指定されたポート上の新しいサービスのセレクタとして使用します。デプロイメントやレプリカセットは、そのセレクタがサービスがサポートするセレクタに変換可能な場合、つまりセレクタにmatchLabelsコンポーネントだけが含まれている場合にのみ、サービスとして公開されます。
-> もし --port でポートが指定されず、公開されたリソースが複数のポートを持つ場合、すべてのポートが新しいサービスによって再利用されることに注意してください。また、ラベルが指定されていない場合、新しいサービスは公開されているリソースからラベルを再利用します。
+posts --> event-bus-srvで問題があるみたい。
+
+じゃあevent-bus-srvをapplyしていない可能性?
+
+```bash
+# 先までの手順を実行してPOSTしてみたらエラーで、
+# 各podsの状況を確認してみる
+$ kubectl logs event-bus-xxxxxx
+# 起動時のままでリクエストを受信していない...
+$ kubectl logs posts-xxxxx
+# postmanからのPOSTは受信しているが
+# postsからevent-bus-srvへリクエストしたときに
+# ECONNREFUSEDというエラーでアプリケーションがクラッシュしたまま
+
+```
+
+なので、やはりminikubeをトンネルさせて、その公開アドレスでアクセスするところまではいいのだけれど、
+
+postsからevent-bus-srvへのアクセスが拒否されている。
+
+どうもindex.jsの更新が反映されていないみたい。。。。なんでやねん。
+
+一旦再起動してみる。
 
 #### Create a Service
 
