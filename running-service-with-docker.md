@@ -1136,31 +1136,73 @@ status: 201で正常に終了した!!
 
 #### Surface環境でなんかまた同じ問題に出くわした件
 
-どうもhost --> Cluster NodePort --> postsまではいいのだけれど、
+`./fix-unapplying-update-on-deployment.md`へ。
 
-posts --> event-bus-srvで問題があるみたい。
+#### Add qeury, comment, moderation services
 
-じゃあevent-bus-srvをapplyしていない可能性?
+やること
+
+- アプリケーションの各サービス間で通信するためのURLの更新
+- dockerイメージの生成とdockerhubへのpush
+- 各サービスごとに`<各サービス名称>-depl.yaml`とClusterIPの作成(event-bus-depl.yamlとほぼ同じ内容)
+- 実行状況の確認
 
 ```bash
-# 先までの手順を実行してPOSTしてみたらエラーで、
-# 各podsの状況を確認してみる
-$ kubectl logs event-bus-xxxxxx
-# 起動時のままでリクエストを受信していない...
-$ kubectl logs posts-xxxxx
-# postmanからのPOSTは受信しているが
-# postsからevent-bus-srvへリクエストしたときに
-# ECONNREFUSEDというエラーでアプリケーションがクラッシュしたまま
-
+$ cd infra/k8s
+# すべて適用するので.が早い
+$ kubectl apply -f .
+# podが生成されたかどうか等の確認
+$ kubectl get pods
+NAME                               READY   STATUS    RESTARTS      AGE
+comments-depl-554fddcdf8-vcm8f     1/1     Running   0             70s
+event-bus-depl-7d5f455fcf-czdxh    1/1     Running   1 (19h ago)   20h
+moderation-depl-6ffdbb65d8-phg47   1/1     Running   0             68s
+posts-depl-577f4d78-nk8jk          1/1     Running   0             25m
+query-depl-7df9688c4d-9p272        1/1     Running   0             66s
+# 何かstatusがおかしいとか詳しく稼働状況知りたいときは
+$ kubectl describe pod query-depl-7df9688c4d-9p272
+...
+EVENTS:
+----
+# EVENTSの項目が一番役立つ情報載っているかも
+# 全て確認して問題ないことが分かったらservicesも確認して正常稼働しているか確認する
+$ kubectl get services
+NAME                  TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+comments-srv          ClusterIP   10.103.141.253   <none>        4001/TCP         5m40s
+event-bus-srv         ClusterIP   10.100.192.116   <none>        4005/TCP         2d22h
+kubernetes            ClusterIP   10.96.0.1        <none>        443/TCP          3d23h
+moderation-srv        ClusterIP   10.103.169.9     <none>        4003/TCP         5m38s
+posts-clusterip-srv   ClusterIP   10.105.72.116    <none>        4000/TCP         2d21h
+posts-srv             NodePort    10.96.85.190     <none>        4000:31660/TCP   2d22h
+query-srv             ClusterIP   10.108.244.193   <none>        4002/TCP         5m36s
 ```
 
-なので、やはりminikubeをトンネルさせて、その公開アドレスでアクセスするところまではいいのだけれど、
+event-bus/index.jsのpostリスナのaxiosがコメントアウトされたままだし、
 
-postsからevent-bus-srvへのアクセスが拒否されている。
+サービスごとのURLにアクセスするように更新した
 
-どうもindex.jsの更新が反映されていないみたい。。。。なんでやねん。
+再度build, push rollout restartして...
 
-一旦再起動してみる。
+postmandの出番。
+
+Minikube on linuxなので
+
+```bash
+# 別窓
+$ minikube service posts-srv --url
+```
+
+postmandで`http://127.0.0.1:44279/posts?Content-Type=application/json`をPOSTしたら
+
+正常に返事がきた。
+
+各podでのアプリケーションのログを確認する。
+
+```bash
+$ kubectl logs <各podのNAME>
+# 出力結果確認
+```
+
 
 #### Create a Service
 
