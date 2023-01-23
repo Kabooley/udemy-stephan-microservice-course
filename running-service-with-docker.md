@@ -1203,34 +1203,25 @@ $ kubectl logs <各podのNAME>
 # 出力結果確認
 ```
 
+## LoadBalancer 
 
-#### Create a Service
+あとはclientを統合するだけ。
 
-https://kubernetes.io/docs/tutorials/hello-minikube/#create-a-service
+clientはブラウザで動く部分がある。
 
-> デフォルトではpodはクラスター内部でのみそのIPアドレスにアクセスできる。
+ブラウザ（React App）とサーバ（Cluster）に分けられるはずである。
 
-> （たとえば）`hello-worl`コンテナへ、Kubernetesのバーチャルネットワークの外部からアクセスしたい場合、podをKubernetesのサービスとして公開しなくてはならない。
+これまでの講義では、
 
-手順：
+通信が行われているのか確認するために、
 
-1. `kubectl expose`コマンドで公開する。
+postsのserviceオブジェクトをNodePortとして公開した。
 
-```bash
-$ kubectl expose service posts-srv --type=LoadBalancer --port=8080
-```
-`--type=LoadBalancer`:
+NodePortは開発中に確認のために使うべきであるので、
 
---typeでこのServiceのタイプを指定する。タイプは`ClustIp`, `NodePort`, `LoadBalancer`, `ExternalName`。デフォルトは`ClusterIP`。
+LoadBalancerサービスを用いる。
 
-
-`--port=8080`: 
-
-サービスが提供されるポート。指定されていない場合は、公開されているリソースからコピーされます
-
-```bash
-
-```
+Browser --> LoadBalancer --> each pods
 
 ## DockerHubの利用
 
