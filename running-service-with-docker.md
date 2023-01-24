@@ -1221,7 +1221,60 @@ NodePortは開発中に確認のために使うべきであるので、
 
 LoadBalancerサービスを用いる。
 
+LoadBalancerはクラスターへアクセスするための単一のエンドポイントを外部へ提供することである。
+
 Browser --> LoadBalancer --> each pods
+
+#### 用語：ロードバランサーとingress
+
+`LoadBalancer`: プロバイダーに連絡してロード バランサーをプロビジョニングするように Kubernetes に指示します。単一のポッドにトラフィックを取り込みます
+
+`Ingress`: トラフィックを他のサービスに分散するための一連のルーティング ルールを含むポッド
+
+概念の説明：
+
+今、クラウドサービスを提供するプロバイダ（AWSとかAzureとか）、そのクラウド内で実行されているクラスタ、プロバイダの外の世界
+
+という3つの空間があるとする。
+
+外部から特定のポッドへのアクセス要求 --> LoadBalancer --> Cluster --> Ingress --> 特定のpod
+
+#### Install `Ingress Nginx`
+
+**NOT`Nginx Ingress`**
+
+Linux環境向け
+
+https://kubernetes.github.io/ingress-nginx/deploy/#minikube
+
+```bash
+$ minikube start
+$ 
+```
+Notably, a pathType needs to be added, and how we specify the backend service name and port has changed:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-srv
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: posts.com
+      http:
+        paths:
+          - path: /posts
+            pathType: Prefix
+            backend:
+              service:
+                name: posts-clusterip-srv
+                port:
+                  number: 4000
+```
+The zip resources attached to each lecture will contain the updated v1 API Ingress code if you need it.
+
+TODO: yamlには何が書いてあるのかの調査
 
 ## DockerHubの利用
 
