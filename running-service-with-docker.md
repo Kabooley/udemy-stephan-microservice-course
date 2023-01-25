@@ -1249,10 +1249,17 @@ https://kubernetes.github.io/ingress-nginx/deploy/#minikube
 
 ```bash
 $ minikube start
-$ 
+$ minikube addons enable ingress
+...
+The ingress addon is enabled
+# とでればOK
 ```
-Notably, a pathType needs to be added, and how we specify the backend service name and port has changed:
+
+下記のingressオブジェクトの設定ファイルを適用して
+
 ```yaml
+# ingress-srv.yaml
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -1272,9 +1279,12 @@ spec:
                 port:
                   number: 4000
 ```
-The zip resources attached to each lecture will contain the updated v1 API Ingress code if you need it.
-
-TODO: yamlには何が書いてあるのかの調査: まとめたのでこちらへペーストすうｒこと
+```bash
+$ kubectl apply -f ingress-srv.yaml
+$ kubectl get ingress
+NAME          CLASS    HOSTS       ADDRESS        PORTS   AGE
+ingress-srv   <none>   posts.com   192.168.49.2   80      3h43m
+```
 
 
 #### Hosts File Tweak
@@ -1358,7 +1368,7 @@ $ sudo vim /etc/hosts
 # 編集して:qw
 ```
 
-TODO: アクセスできない。
+アクセスできない。
 
 ただし、今までminikube ipで取得したIPはアクセスできないことがわかっているので、
 
@@ -1368,9 +1378,11 @@ minikube service ingress-srvでトンネルしてホスト側にIPアドレス�
 
 そこでやっとブラウザからアクセスできるのかも...
 
+https://kubernetes.io/docs/tasks/access-application-cluster/ingress-minikube/
 
+上記のチュートリアルが詳しい。
 
-
+TODO:チュートリアルを参考に実施してみる。
 
 
 ## DockerHubの利用
@@ -1466,3 +1478,44 @@ https://minikube.sigs.k8s.io/docs/handbook/controls/
 
 指定のURLが出力されて、そのURLにアクセスすると今クラスターがどんな状態なのかがわかるページが表示される。
 
+
+#### `minikube addons list`
+
+|-----------------------------|----------|--------------|--------------------------------|
+|         ADDON NAME          | PROFILE  |    STATUS    |           MAINTAINER           |
+|-----------------------------|----------|--------------|--------------------------------|
+| ambassador                  | minikube | disabled     | 3rd party (Ambassador)         |
+| auto-pause                  | minikube | disabled     | Google                         |
+| cloud-spanner               | minikube | disabled     | Google                         |
+| csi-hostpath-driver         | minikube | disabled     | Kubernetes                     |
+| dashboard                   | minikube | disabled     | Kubernetes                     |
+| default-storageclass        | minikube | enabled ✅   | Kubernetes                     |
+| efk                         | minikube | disabled     | 3rd party (Elastic)            |
+| freshpod                    | minikube | disabled     | Google                         |
+| gcp-auth                    | minikube | disabled     | Google                         |
+| gvisor                      | minikube | disabled     | Google                         |
+| headlamp                    | minikube | disabled     | 3rd party (kinvolk.io)         |
+| helm-tiller                 | minikube | disabled     | 3rd party (Helm)               |
+| inaccel                     | minikube | disabled     | 3rd party (InAccel             |
+|                             |          |              | [info@inaccel.com])            |
+| ingress                     | minikube | disabled     | Kubernetes                     |
+| ingress-dns                 | minikube | disabled     | Google                         |
+| istio                       | minikube | disabled     | 3rd party (Istio)              |
+| istio-provisioner           | minikube | disabled     | 3rd party (Istio)              |
+| kong                        | minikube | disabled     | 3rd party (Kong HQ)            |
+| kubevirt                    | minikube | disabled     | 3rd party (KubeVirt)           |
+| logviewer                   | minikube | disabled     | 3rd party (unknown)            |
+| metallb                     | minikube | disabled     | 3rd party (MetalLB)            |
+| metrics-server              | minikube | disabled     | Kubernetes                     |
+| nvidia-driver-installer     | minikube | disabled     | Google                         |
+| nvidia-gpu-device-plugin    | minikube | disabled     | 3rd party (Nvidia)             |
+| olm                         | minikube | disabled     | 3rd party (Operator Framework) |
+| pod-security-policy         | minikube | disabled     | 3rd party (unknown)            |
+| portainer                   | minikube | disabled     | 3rd party (Portainer.io)       |
+| registry                    | minikube | disabled     | Google                         |
+| registry-aliases            | minikube | disabled     | 3rd party (unknown)            |
+| registry-creds              | minikube | disabled     | 3rd party (UPMC Enterprises)   |
+| storage-provisioner         | minikube | enabled ✅   | Google                         |
+| storage-provisioner-gluster | minikube | disabled     | 3rd party (Gluster)            |
+| volumesnapshots             | minikube | disabled     | Kubernetes                     |
+|-----------------------------|----------|--------------|--------------------------------|
