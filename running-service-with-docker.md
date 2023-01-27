@@ -1548,3 +1548,59 @@ https://minikube.sigs.k8s.io/docs/handbook/controls/
 | storage-provisioner-gluster | minikube | disabled     | 3rd party (Gluster)            |
 | volumesnapshots             | minikube | disabled     | Kubernetes                     |
 |-----------------------------|----------|--------------|--------------------------------|
+
+
+## Minikube ingress cannot be access from Host OS
+
+1/27 (Day 3):
+
+Ubuntu上では、ingressを介してアクセスできることが確認できた。
+
+確認手順：
+
+/etc/hostsへ次を全部追記する
+
+```
+127.0.0.1 posts.com
+localhost posts.com
+$(minikube ip) posts.com
+```
+
+```bash
+$ minikube start
+$ kubectl get services
+$ kubectl get ingress
+$ kubectl get pods -n ingress-nginx
+$ kubectl logs <each-pod-services>
+
+# 別窓を開いて
+# 
+# posts-srvだけ公開して、postsmanからpostsへ何件か投稿させる
+$ minikube service posts-srv --url
+http://127.0.0.1:3xxxxx
+```
+
+新規で/postsへ何件か投稿して...
+
+```bash
+# 別窓
+$ minikube tunnel
+```
+
+```bash
+# 本窓
+$ curl posts.com/posts
+```
+
+上記のコマンドの結果として、先ほど投稿した投稿内容が返ってきた。
+
+なのでUbuntuからはアクセスできているみたい。
+
+ただし、ホスト側からはどうしてもアクセスできない。
+
+windows側でport80番を利用しているすべてのプロセスを切るしてからも同様である。
+
+ひとまずだけど、学習するうえで問題になったらまたこの問題に直面することとして、
+
+もう放置でいいや。
+
