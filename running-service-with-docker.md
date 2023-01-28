@@ -1604,3 +1604,383 @@ windows側でport80番を利用しているすべてのプロセスを切るし�
 
 もう放置でいいや。
 
+
+## IngressNginx の config ファイルについて
+
+[config ファイル：実例と記述内容の解釈](#configファイル：実例と記述内容の解釈)より、
+
+たぶんここに従えばいいのかと。
+
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#ingressclass-v1-networking-k8s-io
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-srv
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: posts.com
+      http:
+        paths:
+          - path: /posts
+            pathType: Prefix
+            backend:
+              service:
+                name: posts-clusterip-srv
+                port:
+                  number: 4000
+```
+
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#objectmeta-v1-meta
+
+`metadata:name:`: 
+
+namespaceの中で一意でなくてはなりません。リソースを生成するときに必須でありる。
+名前は主に、作成時のべき等と構成定義のために使用される。更新はできない。
+
+
+`metadata:annotations:`:
+
+アノテーションは、リソースとともに保存される非構造化キー・バリュー・マップであり、任意のメタデータを保存・取得するために外部ツールによって設定されることがある。これらは問い合わせができないため、オブジェクトを変更する際には保存しておく必要がある。
+
+つまり、
+
+`metadata:name:`は任意につけることができる。ただし、namespaceの中で一意でなくてはならない。
+
+`metadata:annotations:`は外から引っ張ってくる情報である。
+
+`IngressClassSpec`:
+
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#ingressclassspec-v1-networking-k8s-io
+
+
+
+## Ingress
+
+https://kubernetes.io/ja/docs/concepts/services-networking/ingress/
+
+> Ingress はクラスター外からクラスター内 Service への HTTP と HTTPS のルートを公開します。トラフィックのルーティングは Ingress リソース上で定義されるルールによって制御されます。
+
+つまりロードバランサーはクラスターの外側に存在する。
+
+クラスターへの通信リクエストは、すべてロードバランサーを通して行われる。
+
+Ingress を使用するには Ingress コントローラが必要である。
+
+Ingress コントローラのひとつが ingress-nginx である。
+
+#### 最小限の Ingress リソースの構成内容
+
+下記の通り、Ingress は deploument や pod などの kind のひとつである。
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minimal-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx-example
+  rules:
+    - http:
+        paths:
+          - path: /testpath
+            pathType: Prefix
+            backend:
+              service:
+                name: test
+                port:
+                  number: 80
+```
+
+## そもそも yaml ファイルは何を書けばいいのか？
+
+https://kubernetes.io/ja/docs/concepts/overview/working-with-objects/kubernetes-objects/
+
+Kubernetes オブジェクトは Kubernetes 上で永続的な存在である。
+
+Kubernetes オブジェクトは「意図の記録」である。一度オブジェクトを作成すると、kubernetes は常にそのオブジェクトが存在し続けるように動く。
+
+オブジェクトを作成することで、Kubernetes に対し効果的にあなたのクラスターのワークロードがこのようになっていて欲しいと伝えているのです。
+
+ではオブジェクトはこうであってほしいとどう伝えればいいのか？
+
+#### spec と status
+
+ほとんどの Kubernetes オブジェクトは、
+
+オブジェクトどういうものであってほしいのか、どういう状態でいてほしいのかを定めるフィールドを持つことになる。
+
+それが`spec`と`status`である。
+
+spec: 望ましい状態としてオブジェクトに持たせたい特徴を記述するフィールド
+
+status: オブジェクトの現在の状態を示し、kubernetes によってその状態を監視、更新され、指定された望ましい状態になるように管理される。
+
+ということで、
+
+開発者が手を付けられる、そのオブジェクトがどうあってほしいのかを(config ファイルで)記述できるのが spec で、
+
+そのオブジェクトが今どんな状態なのか稼働中の状態を示すのが status である。
+
+status は config ファイルで記述されるものではなくて今現在オブジェクトがどういう状態なのか kubernetes によって内部的に更新される値である。
+
+#### 詳細な説明
+
+https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
+
+#### config ファイル：実例と記述内容の解釈
+
+config ファイルは、
+
+オブジェクトの基本情報
+
+そのオブジェクトの spec
+
+を記述しなくてはならない。
+
+```yaml
+# -- 必須フィールド --
+#
+# apiVersion: どのバージョンのKubernetesAPIを利用してオブジェクトを作成するのか
+# kind: どの種類のオブジェクトを作成するのか
+# metadata: オブジェクトを一位に特定するための情報
+#   name, UID, namesapceを指定して一意の文字列を渡す。
+# spec: オブジェクトの望ましい状態
+# -------------------
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: nginx-deployment
+#
+# specの内容は、オブジェクトごとに異なるよ
+#
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 2 # tells deployment to run 2 pods matching the template
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+```
+
+spec の正確なフォーマットは Kubernetes オブジェクトごとに異なり、オブジェクトごとに特有の入れ子フィールドを持つので、
+
+各オブジェクトごとにどうなっているべきかを調べる必要がある。
+
+kubernetes API リファレンスがすべての Kubernetes オブジェクトに関する spec のフォーマットを探すのに役立つとのこと。
+
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/
+
+
+## Deploying the React App
+
+`create-react-app`はDockerコンテナの中で実行するとバグが起きるらしい。
+
+なので次のようにblog/client/のDockerfileに追記する。
+
+```Dockerfile
+FROM node:16-alpine
+ 
+# Add the following lines
+ENV CI=true
+ENV WDS_SOCKET_PORT=0
+ 
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY ./ ./
+ 
+CMD ["npm", "start"]
+```
+
+先までの講義で
+
+```yaml
+# ingress-srv.yaml
+# ...
+spec:
+  rules:
+    # - host: posts.com
+    - host: my-app.org
+```
+というドメインにしていたけれど、
+
+これはクラスターの中で分かればいいので任意に変えても大丈夫
+
+/etc/hosts
+
+```
+127.0.0.1 my-app.org
+```
+
+本筋に戻って。
+
+ReactAppをpodに展開するので、コード内のURLを更新する
+
+```JavaScript
+// CommentCreate.js
+const CommentCreate = ({ postId }) => {
+    const [content, setContent] = useState('');
+
+    const onSubmit = async (event) => {
+        event.preventDefault();
+
+        // await axios.post(`http://localhost:4001/posts/${postId}/comments`, {
+        await axios.post(`http://posts.com/posts/${postId}/comments`, {
+            content
+        })
+        .catch(e => console.error(e.message));
+
+        setContent('');
+    };
+  // ...
+};
+// 他のファイルも同様に...
+```
+
+あとはdockerイメージの生成とクラスターへのデプロイである。
+
+```bash
+$ cd blog/client
+$ docker build -t $username/client .
+$ docker push $username/client
+$ cd infra/k8s
+$ touch client-depl.yaml
+# 内容を編集して...
+$ kubectl apply -f client-depl.yaml
+```
+
+他のサービスのdeploymentの内容とほぼ同じ
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: client-depl
+spec:
+    replicas: 1
+    selector: 
+        matchLabels:
+            app: client
+    template:
+        metadata: 
+            labels:
+                app: client
+        spec: 
+            containers: 
+              - name: client
+                image: kabooley/client
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: client-srv
+spec:
+    selector:
+        app: client
+    ports: 
+        - name: client
+          protocol: TCP
+          port: 3000
+          targetPort: 3000
+```
+
+#### Unique Route Path
+
+想定されるリクエストとリクエストの到達先
+
+以下の内容をすべてingressの設定ファイルに書き出す必要がある
+
+```
+--------------------
+|ingress controller|  --> |
+--------------------      |
+                          |--- POST /posts        -->       | POD Posts |
+                          |--- POST /posts/:id/comments --> | POD Comments |
+                          |--- GET /posts          -->      | POD Query |
+                          |                                 | POD Moderation |
+                          |--- POST /              -->      | POD React |
+```
+
+問題がある。
+
+ingressはリクエストのメソッドに応じてルーティングをすることができない！
+
+つまりPOSTかGEtか判断できないのである。
+
+となると同じpathだと区別できない。
+
+これを解決するために完全に区別がつくパスに変更する必要があるとのこと。
+
+`POST /posts`を`POST /posts/create`にするなど。
+
+```JavaScript
+// PostCreate.js
+
+const PostCreate = () => {
+    const [title, setTitle] = useState('');
+
+    const onSubmit = async (event) => {
+        event.preventDefault();
+
+        console.log(`post`);
+        console.log(title);
+
+        // pathの変更
+        await axios.post('http://posts.com/posts/create', {
+            title
+        })
+        .catch(e => {
+            console.error(e);
+        });
+
+        
+        setTitle("");
+    };
+    // ...
+};
+
+// posts/index.js
+
+// pathの変更
+app.post('/posts/create', async (req, res) => {
+    const id = randomBytes(4).toString('hex');
+    const { title } = req.body;
+    
+    posts[id] = {
+        id, title
+    };
+
+    console.log(posts[id]);
+
+    await axios.post('http://event-bus-srv:4005/events', {
+        type: 'PostCreated',
+        data: {
+            id, title
+        }
+    });
+
+    res.status(201).send(posts[id]);
+});
+```
+
+これを反映
+
+```bash
+$ cd blog/client
+# postsとclientのイメージ作成とプッシュ、ロールアウトリスタート(client-depl)
+$ docker build -t $username/client .
+```
