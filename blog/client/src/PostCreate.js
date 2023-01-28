@@ -4,18 +4,13 @@ import axios from 'axios';
 const PostCreate = () => {
     const [title, setTitle] = useState('');
 
-    /**
-     * submitされたらinputフォームのタイトルを投稿する
-     * 
-     * 投稿先は`http://localhost:4000/posts`である
-     * */ 
     const onSubmit = async (event) => {
         event.preventDefault();
 
         console.log(`post`);
         console.log(title);
 
-        await axios.post('http://localhost:4000/posts', {
+        await axios.post('http://posts.com/posts/create', {
             title
         })
         .catch(e => {
