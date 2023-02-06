@@ -93,3 +93,234 @@ const fileCache = localforage.createInstance({
 
 ```
 
+## Loading CSS files
+
+```JavaScript
+import 'bulma/css/bulma.css'
+```
+
+これをインポートするとエラーになる。
+
+```bash
+Error: Build failed with 1 error.
+    error: Unexpected "@"
+```
+
+`@`はこのCSSファイルの内容の最初の文字である。
+
+エラーの原因は、
+
+```TypeScript
+// fetch-plugin.ts
+    const result: esbuild.OnLaodResult = {
+        loader: 'jsx'
+        // ...
+    };
+```
+
+というようにローディングするモジュールはすべてJavaScriptファイルであることを前提としているために、
+
+JavaScriptファイルであることを期待していたためである。
+
+
+#### `.css`拡張子を`loader`に与える方法は使えない
+
+```TypeScript
+// fetch-plugin.ts
+
+const { data, request } = await axios.get(args.path);
+
+const loader = args.path.match(/.css$/) ? 'css' : 'jsx';
+const result: esbuild.OnLoadResult = {
+    loader: loader,
+    // ...
+};
+```
+
+これなら行けるのでは？と思ったらエラー。
+
+```
+Uncaught (in promise) Error: Build failed with 1 error.
+error: Cannot import "a:http://unpkg.com/bulma/css/bulma.css" into a JavaScript file without an output path configured
+```
+
+これの意味するところは...
+
+https://esbuild.github.io/content-types/#css-from-js
+
+> また、JavaScriptからCSSをインポートすることもできます。この場合、esbuildは与えられたエントリポイントから参照されるすべてのCSSファイルを収集し、そのJavaScriptエントリポイントのJavaScript出力ファイルの隣にある兄弟CSS出力ファイルにバンドルします。つまり、esbuildがapp.jsを生成すると、app.jsが参照するすべてのCSSファイルを含むapp.cssも生成されます。以下は、JavaScript から CSS ファイルをインポートする例です。
+
+ということで、
+
+予めその(cssをimportする記述をした)JavaScriptファイルの存在するディレクトリに、そのimportする空のcssファイルを用意しておかなくてはならない模様。
+
+ここで問題なのは、
+
+このバンドリングプロセスはブラウザ上で行われているので、
+
+ファイルシステムが存在しない点である。
+
+これを解決しなくてはならない。
+
+#### ESbuildのバンドリング`loader`はファイルシステムが存在することが前提
+
+```bash
+index.js ──────┐      ┌────output.js
+            ESBuild ──┥     # css cannot be generated!
+bulma.css ─────┘      └────output.css
+```
+
+ファイルシステムが存在する環境であれば、cssファイルを出力できるのだけれど、
+
+ブラウザにはファイルシステムが存在しないからcssファイルを出力することができないよ。
+
+なのでファイルの出力をしない方向で解決策を見出す。
+
+
+#### cssの内容はDOMに書き込む
+
+最早出力結果にcssのインポートを行わず(loaderを使わず)、
+
+かわりにcssの内容をDOMに書き込むことにする
+
+```TypeScript
+// fetch-plugin.ts
+
+const { data, request } = await axios.get(args.path);
+
+const fileType = args.path.match(/.css$/) ? 'css' : 'jsx';
+
+const constents = fileType === 'css' 
+    ? 
+    `
+        const style = document.createElement('style');
+        style.innreText = 'body {background-color: "red"}';
+        document.head.appendChild(style);
+    `
+    : data;
+const result: esbuild.OnLoadResult = {
+    loader: 'jsx',
+    // ...
+};
+```
+bundle結果：
+
+```JavaScript
+(() => {
+    // a: http://unpkg.com/bulma/css/bulma.css
+    vat style = document.createElement('style');
+    style.innerText = 'body {background-color: "red"}';
+    document.head.appendChild(style);
+})();
+```
+
+あとはいかにハードコーディングしないようにするか。
+
+#### DOMへの動的cssコードの埋め込み
+
+次はうまくいかない
+
+```JavaScript
+const constents = fileType === 'css' 
+    ? 
+    `
+        const style = document.createElement('style');
+        style.innreText = '${data}';
+        document.head.appendChild(style);
+    `: data;
+```
+
+`Unterminated string literal`
+
+文字をエスケープしていないからである。
+
+```TypeScript
+// fetch-plugin.ts
+
+const { data, request } = await axios.get(args.path);
+
+const fileType = args.path.match(/.css$/) ? 'css' : 'jsx';
+
+const escaped = data
+    .replace(/\n/g, '')
+    .replace(/"/g, '\\"')
+    .replace(/'/g, "\\'");
+
+const constents = fileType === 'css' 
+    ? 
+    `
+        const style = document.createElement('style');
+        style.innreText = '${escaped}';
+        document.head.appendChild(style);
+    `
+    : data;
+const result: esbuild.OnLoadResult = {
+    loader: 'jsx',
+    // ...
+};
+```
+
+これで動的にcssを出力できた！
+
+
+## 関係ない話
+
+gitを操作するとどうなるのかアニメーションで示してくれるサイト
+
+https://gigazine.net/news/20230204-git-sim/
+
+#### Separete Load Files, Extracting common caching logic
+
+index.js, .css, .*でonLoad関数を分割する。
+
+重複しているキャッシング機能を取り出す。
+
+NOTE: 公式からダウンロードして
+
+キャッシング機能はすべてローディングする際にチェックするので、
+
+次のようにする
+
+```TypeScript
+// fetch-plugin.ts
+
+    // この定義の順番が重要
+    // トップレベルで定義すること。
+    // `.*`ですべてのローディングに適用する
+    build.onLoad({ filter: /.*/ }, (args: any) => {
+        // キャッシングロジック
+        const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(args.path);
+
+        if(cachedResult) {
+            return cachedResult;
+        };
+    });
+```
+
+キャッシング済ならばそのキャッシング済のモジュールのコードを返す。
+
+キャッシング済でないなら次のonLoad()関数に移る
+
+という機能を利用するので、
+
+これ以降のonLaod()関数にはキャッシングされてなかった場合の定義だけ書けばすべて矛盾なく動作してくれる。
+
+---------
+
+#### Sandboxing an iFrame
+
+iframeと(親環境が)相互アクセスができる条件は...
+
+- `iframe`が`sandbox`プロパティを持たないとき、または`sandbox="allow-same-origin"`プロパティを持つとき
+
+- 
+
+#### `sandbox`とは
+
+iframeのできることを制限するiframeタグの属性である。
+
+iframeに`sandbox`とだけ書いておくと、親環境との相互アクセスなどすべての制約を適用し、
+
+`sandbox`を記述していないiframeは基本的にすべて許可という状態になる。
+
+`sandbox="allow-xxxx"`のように許可する機能を明示的に指定する必要がある。
