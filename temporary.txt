@@ -602,3 +602,80 @@ $ npm install bulmaswatch
 ```
 
 見た目の話。割愛。
+
+---
+
+#### CodeCell
+
+```TypeScript
+// code-cell.tsx
+import { useState } from 'react';
+import CodeEditor from './code-editor';
+import Preview from './preview';
+import bundle from '../bundler';
+
+const CodelCell = () => {
+    const [code, setCode] = useState('');
+    const [input, setInput] = useState('');
+
+    const onClick = () => {
+        const output = await bundle(input);
+        setCode(output);
+    };
+
+    return (
+        //...
+    );
+};
+
+export default CodeCell;
+```
+```TypeScript
+// index.tsx
+import 'bulmaswatch/superhero/bulmaswatch.min.css';
+import ReactDOM from 'react-dom';
+import CodeCell from './components/code-cell';
+
+const App = () => {
+    return (
+        <div>
+            // 将来的にこのCodeCellコンポーネントの配列を渡すようになる
+            <CodeCell />
+        </div>;
+    );
+};
+
+// ...
+```
+
+## リサイジング
+
+エディタとプレビューをリサイジング可能にする
+
+#### `react-resizable`
+
+```bash
+$ cd jbook
+$ npm install --save-exact react-resizable@3.0.4 @types/react-resizable@3.0.2 --legacy-peer-deps
+$ yarn add --exact react-resizable@3.0.4 @types/react-resizable@3.0.2 --legacy-peer-deps
+```
+
+`import { Resizable, ResizableBox } from 'react-resizable';`より、
+
+- Resizable: 
+- ResizableBox: 
+
+```TypeScript
+// components/resizable.tsx
+import { ResizableBox } from 'react-resizable';
+
+interface ResizableProps {
+    direction: 'horizontal' | 'vertical';
+  children?: React.ReactNode;
+};
+
+const Resizable: React.FC<ResizableProps> = ({ direction, children }) => {
+    return (<div>{children}</div>);
+};
+
+export default Resizable;
