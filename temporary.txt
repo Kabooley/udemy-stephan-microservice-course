@@ -679,3 +679,94 @@ const Resizable: React.FC<ResizableProps> = ({ direction, children }) => {
 };
 
 export default Resizable;
+
+
+#### ウィンドウ幅を変更するとリサイズバーが初期位置に戻ってしまう問題
+
+要は、Resizableコンポーネントと、ResizableBoxコンポーネントでそれぞれ別々の「幅」のプロパティを持つことによって生じる歪みによって引き起こされる問題である。
+
+まず、水平方向リサイズのハンドル（リサイズコンポーネント）は、エディタコンポーネントをラッピングしている。
+
+Resizableコンポーネントの幅が、今650pxでレンダリングされたとする。
+
+そのとき、react-resizableのコンポーネント（ResizableBox）にも650pxとして、内部的に持っているプロパティwidthに登録される。
+
+今、ユーザがこの水平ハンドルを使ってエディタを縮めて、250pxにしたとする。
+
+この時、resizableコンポーネントの幅は650pxのままだけれど、
+
+ResizableBoxの幅は250pxで登録される。
+
+> ここでの全体の問題は、ResizableBoxコンポーネントが、現在のwidthが何であるかを決定するために、独自の内部管理された状態を持っていることです。Resizableコンポーネントをレンダリングするたびに、このwidth propに新しい値を提供すると、内部の状態の部分を上書きするか変更します。
+> そしてこれがジャンプを引き起こす原因です。
+
+#### widthの同期
+
+- リサイズハンドルを水平方向に動かした後にウィンドウのリサイズが変更する問題の解決
+- ウィンドウ幅を狭くしすぎるとプレビュー画面が消える問題の解決
+
+```TypeScript
+// resizable.tsx
+
+// new added.
+const [width, setWidth] = useState(window.innerWidth * 0.75);
+
+// inside of useEffect()...
+// NOTE: widthを依存関係配列に追加しておいて
+const listener = () => {
+    // ...
+    timer = setTimeout(() => {
+        // ...
+        // new added.
+        if(window.innerWidth * 0.75 < width) {
+            setWidth(window.innerWidth * 0.75);
+        }
+    }, 100)
+}
+
+if(direction === 'horizontal') {
+    resizableProps = {
+        // ...
+        // width: window.innerWidth * 0.75;
+        width: width,
+        onResizeStop: (event, data) => {
+            setWidth(data.size.width);
+        },
+    }
+}
+```
+
+## Realtime bundling and displaying
+
+ユーザが入力したコードをリアルタイムにプレビュー画面に出力させる。
+
+パフォーマンスのために、
+
+ユーザ入力が起こって1秒間入力がなかったらバンドリングプロセスを実行するようにする。
+
+```TypeScript
+// code-cell.tsx
+
+import { useState, useEffect } from 'react';
+
+
+const CodeCell = () => {
+    // ...
+
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            const output = await bundle(input);
+            setCode(output);
+        }, 1000);
+
+        return () => {
+            clearTimeout(timer);
+        }
+    }, [input]);
+
+    // Delete onClick()
+}
+```
+
+これでユーザがコードを入力して１秒後にバンドルプロセスを実行できる。
+
