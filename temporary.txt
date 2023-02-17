@@ -770,3 +770,44 @@ const CodeCell = () => {
 
 これでユーザがコードを入力して１秒後にバンドルプロセスを実行できる。
 
+---
+
+## Why the Broken cursor?
+
+マークダウンエディタにおいてカーソルの表示がおかしくなってしまう件について
+
+テキストエリアにはテキストを入力できるけれど、
+
+テキストエリアに表示されているのは`textarea`要素ではなくて実は`pre`要素だったのである。
+
+だからテキストエリアにシンタックスハイライトやスタイルが適用されているのである。
+
+#### Solving class name conflicts
+
+markdown-editor のパッケージが
+
+スタイルの適用で important をつけているため、これを外すと通常のテキストエリアの表示と同じになる。
+
+なので CSS ルールを上書きする。
+
+ADD `src/components/text-editor.css`
+
+```CSS
+/* これでもいいけど... */
+.w-md-editor .title {
+    line-height: unset !important;
+    font-size: unset !important;
+    font-weight: unset !important;
+}
+
+/* こうする */
+.w-md-editor .title {
+    line-height: unset;
+    font-size: unset;
+    font-weight: unset;
+}
+```
+
+この方法はパッケージが採用しているスタイリングのクラス名を上書きする行為なので一般的でない解決方法である。
+
+
