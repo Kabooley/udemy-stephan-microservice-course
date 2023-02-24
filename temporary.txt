@@ -811,3 +811,65 @@ ADD `src/components/text-editor.css`
 この方法はパッケージが採用しているスタイリングのクラス名を上書きする行為なので一般的でない解決方法である。
 
 
+--- 2/24
+
+#### Redux with class-based component
+
+番外編: Counter componentをclassコンポーネントにするとどうなるか
+
+hooksを使わなくなるね。Reduxの機能もHooksを使わなくなり、
+
+かわりに`connect`を使う。
+
+```JavaScript
+import { Component } from 'react';
+import { connect } from 'react-redux';
+
+// classコンポーネントはpropsを取得するにはthis.propsで呼び出す
+class Counter extends Component {
+    incrementHandler() {
+        this.props.increment();
+    };
+
+    decrementHandler() {
+        this.props.decrement();
+    };
+
+    toggleCounterHandler() {
+
+    };
+
+    render() {
+        return (
+            <main>
+                <h1>Redux Counter</h1>
+                <div className={classes.value}>{this.props.counter}</div>
+                <div>
+                    <button onClick={this.incrementHandler.bind(this)}>Increment</button>
+                    <button onClick={this.decrementHandler.bind(this)}>Decrement</button>
+                </div>
+                <button onClick={this.toggleCounterHandler.bind(this)}>Toggle</button>
+            </main>
+        );
+    }
+};
+
+// Reduxのstateから、コンポーネントに渡されるpropsへ含めたい値をここで返させる。
+// そうすることでReduxのstateをコンポーネントに渡すことができる
+const mapStateToProps = state => {
+    return {
+        coutner: state.counter
+    };
+};
+
+// dispatchする関数とかを定義して、propsとして渡すことができる。
+const mapDispatchToProps = dispatch => {
+    return {
+        increment: () => dispatch({type: 'increment'}),
+        decrement: () => dispatch({type: 'decrement'})
+    }
+}
+
+// Redux機能をこのコンポーネントへ追加する手段
+export default connect(mapStateToProps, mapDispatchToProps)(Counter);
+```
