@@ -873,3 +873,187 @@ const mapDispatchToProps = dispatch => {
 // Redux機能をこのコンポーネントへ追加する手段
 export default connect(mapStateToProps, mapDispatchToProps)(Counter);
 ```
+
+--- 2/26
+
+## 217 Cell Type Rendering
+
+BEFORE:
+
+```TypeScript
+// cell-list.tsx
+import { usedTypedSelector } from '../hooks/use-typed-selector';
+import CellListItem from './cell-list-item';
+
+const CellList: React.FC = () => {
+    const cells = useTypedSelector(({ cells: { order, data }}) => order.map((id) => data[id]));
+
+    const renderedCells = cells.map(cell => <CellListItem cell={cell} />);
+
+    return <div>{renderedCells}</div>;
+};
+
+export default CellList;
+```
+
+```TypeScript
+// cell-list-item.tsx
+import { Cell } from '../state';
+
+interface CellListItemProps {
+    cell: Cell
+};
+
+const CellListItem: React.FC<CellListItemProps> = ({ cell }) => {
+    return <div>{cell.id}</div>
+};
+
+export default CellListItem;
+```
+
+AFTER:
+
+```TypeScript
+// cell-list-item.tsx
+import { Cell } from '../state';
+
+interface CellListItemProps {
+    cell: Cell
+};
+
+const CellListItem: React.FC<CellListItemProps> = ({ cell }) => {
+    let child: JSX.Element;
+    if(cell.type === 'code') {
+        child = <CodeCell />;
+    }
+    else {
+        child = <TextEditor />;
+    };
+
+    return <div>{child}</div>
+};
+
+export default CellListItem;
+```
+
+TEST:
+
+```TypeScript
+store.dispatch({
+    type: ActionType.INCERT_CELL_BEFORE,
+    payload: {
+        id: null,
+        type: 'code'
+    }
+});
+
+store.dispatch({
+    type: ActionType.INCERT_CELL_BEFORE,
+    payload: {
+        id: null,
+        type: 'text'
+    }
+});
+```
+
+## 218: Reminder on Action Creator Helper
+
+*Action Dispatchingの実装*
+
+Reduxストアから情報を取得することができるようになった。
+
+Reduxストアの情報を更新もできるようにする。
+
+今、ユーザがテキストエディタを編集したり、コードエディタにコードを入力したら、
+
+Reduxストアも更新されるようにする
+
+--> action ディスパッチの実装をしていく
+
+`use-typed-selector.ts`と同様に、useDispatch()のためのhooksコンポーネントを作成する
+
+```TypeScript
+// hooks/use-actions.ts
+import { useDispatch } from 'react-redux';
+import { bindActionCreators } from 'redux';
+import { actionCreators } from '../state';
+
+export const useActions = () => {
+    const dispatch = useDispatch();
+
+    return bindActionCreators(actionCreators, dispatch);
+};
+
+// USAGE:
+// const { updateCell } =  useActions();
+// updateCell(/* action contents */);
+```
+
+```TypeScript
+// state/index.ts
+// NOTE: add this.
+export * as actionCreators from './action-creators';
+```
+
+#### 219: Extracting local state
+
+今作っている仕組み：
+
+Redux store: Cellの情報
+
+cell-list.tsx：Cellの配列が与えられて、Cell要素それぞれにセルリストアイテムを作成して、セルオブジェクトを渡す
+
+cell-list-item.tsx:`CodeCell`または`TextEditor`を作成する
+
+Reduxと接続できたので、CodeCell, TextEditorのローカルstateを除去していく
+
+1. `Cell`を渡す
+
+```TypeScript
+// cell-list-item.tsx
+
+const CellListItem: React.FC<CellListItemProps> = ({ cell }) => {
+    let child: JSX.Element;
+    if(cell.type === 'code') {
+        // Added cell props
+        child = <CodeCell cel={cell} />;
+    }
+    else {
+        child = <TextEditor />;
+    };
+
+    return <div>{child}</div>
+};
+```
+
+2. `CodeCell`は`Cell`を受け付けるようにする
+
+```TypeScript
+// code-cell.tsx
+import { Cell } from '../state';
+import { useActions } from '';
+
+interface CodeCellProps {
+    cell: Cell
+};
+
+const CodeCell: React.FC<CodeCellProps> = ({ cell }) => {
+    // NOTE: Delete input useState()
+
+    const { updateCell } = useActions(); 
+    useEffect(() => {
+        // ...
+        // inputからcell.contentへ
+        const output =  await bundle(cell.content);
+
+    }, [cell.content]);
+
+    return (
+        <CodeEditor
+            initialValue={cell.content}
+            // setInput()をなくしてディスパッチ関数にする
+            onChange={(value) => updateCell(cell.id, value)}
+        />
+    );
+};
+```
